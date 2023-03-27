@@ -500,8 +500,8 @@ ImmediateToRegisterMemory(uint16 Instruction, FILE* fp, char *Registers[],
     }
 }
 
-void
-ImmediateToRegister(uint16 Instruction, FILE* fp, char *Registers[])
+uint16 *
+ImmediateToRegister(uint16 Instruction, FILE* fp, char *Registers[], uint16 *RegistersValue)
 {
     uint16 WBitMask = 0x0800;
     uint16 REG = (Instruction & 0x0700) >> 8;
@@ -523,11 +523,23 @@ ImmediateToRegister(uint16 Instruction, FILE* fp, char *Registers[])
             Data = Instruction & 0x0ff;
         }
         REG = REG | 8;
+        RegistersValue[REG] = Data;
         printf("mov %s, %u\n", Registers[REG], Data);
     }
     else
     {
         uint16 Data = Instruction & 0x00ff;
+        RegistersValue[REG] = Data;
+        if(REG < 4)
+        {
+            RegistersValue[REG + 8] = (RegistersValue[REG + 8] & 0xff00) | Data; 
+        }
+        else
+        {
+            RegistersValue[REG + 4] = (RegistersValue[REG + 4] & 0xff00) | Data; 
+        }
         printf("mov %s, %u\n", Registers[REG], Data);
     }
+
+    return(RegistersValue);
 }

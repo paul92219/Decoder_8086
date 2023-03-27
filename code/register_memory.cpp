@@ -289,8 +289,9 @@ AddSubCmpRegisterMemoryToFromRegister(uint16 Instruction, uint16 Operation, FILE
     }
 }
 
-void
-RegisterMemoryToFromRegister(uint16 Instruction, FILE* fp, char *Registers[], char *Register_Memory[])
+uint16 *
+RegisterMemoryToFromRegister(uint16 Instruction, FILE* fp, char *Registers[], char *Register_Memory[],
+                             uint16 *RegistersValue)
 {
     uint16 DBitMask = 0x0200;
     uint16 WBitMask = 0x0100;
@@ -333,10 +334,12 @@ RegisterMemoryToFromRegister(uint16 Instruction, FILE* fp, char *Registers[], ch
 
         if(Instruction & DBitMask)
         {
+            RegistersValue[REGIndex] = RegistersValue[R_MIndex];
             printf("mov %s, %s\n", Registers[REGIndex], Registers[R_MIndex]);
         }
         else
         {
+            RegistersValue[R_MIndex] = RegistersValue[REGIndex];
             printf("mov %s, %s\n", Registers[R_MIndex], Registers[REGIndex]);
         }
     }
@@ -430,4 +433,6 @@ RegisterMemoryToFromRegister(uint16 Instruction, FILE* fp, char *Registers[], ch
 
         }
     }
+
+    return(RegistersValue);
 }

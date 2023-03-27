@@ -22,6 +22,9 @@ char *Registers[16] =
 {"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh",
  "ax", "cx", "dx", "bx", "sp", "bp", "si", "di"};
 
+uint16 RegistersValue[16] =
+{0, 0, 0, 0,  0, 0, 0, 0,
+ 0, 0, 0, 0,  0, 0, 0, 0};
 
 char *Register_Memory[8] =
 {"[bx + si", "[bx + di", "[bp + si", "[bp + di",
@@ -37,13 +40,13 @@ int main()
 {
     FILE* fp;
     uint16 Instruction;
-    char filename[] = "D:\\Projects\\Decoder_8086\\misc\\many_instructions";
+    char filename[] = "D:\\Projects\\Decoder_8086\\data\\listing_45";
 
 
     // Open the file in read binary mode
     fp = fopen(filename, "rb");
 
-    int num_values = 118; // Number of 16-bit values to read
+    int num_values = 8; // Number of 16-bit values to read
     
     // Check if the file was opened successfully
     if (fp == NULL) {
@@ -127,12 +130,13 @@ int main()
             
             case 0x8800:
             {
-                RegisterMemoryToFromRegister(Instruction, fp, Registers, Register_Memory);
+                RegisterMemoryToFromRegister(Instruction, fp, Registers,
+                                             Register_Memory, RegistersValue);
             } break;
 
             case 0xb000:
             {
-                ImmediateToRegister(Instruction, fp, Registers);
+                ImmediateToRegister(Instruction, fp, Registers, RegistersValue);
             } break;
 
             case 0xa000:
@@ -201,6 +205,19 @@ int main()
                                                    Registers, Register_Memory);            
             } break;
         }
+    }
+
+    printf("Finaly registers:\n");
+    for(int RegIndex = 0;
+        RegIndex < 16;
+        ++RegIndex)
+    {
+        if(RegIndex == 8)
+        {
+            printf("\n");
+        }
+        printf("    %s: 0x%x (%u)\n", Registers[RegIndex], (uint16)RegistersValue[RegIndex],
+               RegistersValue[RegIndex]);
     }
     
     fclose(fp);
