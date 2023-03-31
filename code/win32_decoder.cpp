@@ -34,7 +34,7 @@ char *LoopInstructions[4] = {"loopnz", "loopz", "loop", "jcxz"};
 
 char *SegmentRegisters[4] = {"es", "cs", "ss", "ds"};
 
-uint16 RegistersValue[16] = {0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0};
+uint16 RegistersValue[8] = {0, 0, 0, 0,  0, 0, 0, 0};
 
 
 uint16 SegmentRegistersValue[4] = {0, 0, 0, 0};
@@ -230,14 +230,14 @@ int main()
 
     printf("Finaly registers:\n");
     for(int RegIndex = 0;
-        RegIndex < 16;
+        RegIndex < 8;
         ++RegIndex)
     {
         if(RegIndex == 8)
         {
             printf("\n");
         }
-        printf("    %s: 0x%x (%u)\n", Registers[RegIndex], (uint16)RegistersValue[RegIndex],
+        printf("    %s: 0x%x (%u)\n", Registers[RegIndex + 8], (uint16)RegistersValue[RegIndex],
                RegistersValue[RegIndex]);
     }
 

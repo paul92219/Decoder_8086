@@ -334,61 +334,89 @@ RegisterMemoryToFromRegister(uint16 Instruction, FILE* fp, char *Registers[], ch
 
         if(Instruction & DBitMask)
         {
-            RegistersValue[REGIndex] = RegistersValue[R_MIndex];
-
-            if((REGIndex < 7) || (R_MIndex < 7))
+            if((REGIndex < 7) && (R_MIndex < 7))
             {
-                if(REGIndex < 4)
+                if((REGIndex < 4) && (R_MIndex < 4))
                 {
-                    RegistersValue[REGIndex + 8] = ((RegistersValue[REGIndex + 8] & 0xff00) |
-                                                    RegistersValue[REGIndex]);
+                    RegistersValue[REGIndex] = ((RegistersValue[REGIndex] & 0xff00) |
+                                                (RegistersValue[R_MIndex] & 0x00ff)); 
                 }
-                else
+                else if((REGIndex >= 4) && (R_MIndex >= 4))
                 {
-                    RegistersValue[REGIndex + 4] = ((RegistersValue[REGIndex + 4] & 0x00ff) |
-                                                    (RegistersValue[REGIndex] << 8));
+                    RegistersValue[REGIndex - 4] = ((RegistersValue[REGIndex - 4] & 0x00ff) |
+                                                    (RegistersValue[R_MIndex - 4] & 0xff00)); 
                 }
-
+                else if((REGIndex < 4) && (R_MIndex >= 4))
+                {
+                    RegistersValue[REGIndex] = ((RegistersValue[REGIndex] & 0xff00) |
+                                                ((RegistersValue[R_MIndex - 4] & 0xff00) >> 8)); 
+                }
+                else if((REGIndex >= 4) && (R_MIndex < 4))
+                {
+                    RegistersValue[REGIndex - 4] = ((RegistersValue[REGIndex - 4] & 0x00ff) |
+                                                    ((RegistersValue[R_MIndex] & 0x00ff) << 8)); 
+                }
+            }
+            else if(R_MIndex < 7)
+            {
                 if(R_MIndex < 4)
                 {
-                    RegistersValue[R_MIndex + 8] = ((RegistersValue[R_MIndex + 8] & 0xff00) |
-                                                    RegistersValue[R_MIndex]);
+                    RegistersValue[REGIndex - 8] = ((RegistersValue[REGIndex - 8] & 0xff00) |
+                                                   (RegistersValue[R_MIndex] & 0x00ff));
                 }
                 else
                 {
-                    RegistersValue[R_MIndex + 4] = ((RegistersValue[R_MIndex + 4] & 0x00ff) |
-                                                    (RegistersValue[R_MIndex] << 8));
+                    RegistersValue[REGIndex - 8] = ((RegistersValue[REGIndex - 8] & 0x00ff) |
+                                                    (RegistersValue[R_MIndex - 4] & 0xff00));
                 }
+            }
+            else
+            {
+                RegistersValue[REGIndex - 8] = RegistersValue[R_MIndex - 8];
             }
             printf("mov %s, %s\n", Registers[REGIndex], Registers[R_MIndex]);
         }
         else
         {
-            RegistersValue[R_MIndex] = RegistersValue[REGIndex];
-
-            if((REGIndex < 7) || (R_MIndex < 7))
+            if((R_MIndex < 7) && (REGIndex < 7))
+            {
+                if((R_MIndex < 4) && (REGIndex < 4))
+                {
+                    RegistersValue[R_MIndex] = ((RegistersValue[R_MIndex] & 0xff00) |
+                                                (RegistersValue[REGIndex] & 0x00ff)); 
+                }
+                else if((R_MIndex >= 4) && (REGIndex >= 4))
+                {
+                    RegistersValue[R_MIndex - 4] = ((RegistersValue[R_MIndex - 4] & 0x00ff) |
+                                                    (RegistersValue[REGIndex - 4] & 0xff00)); 
+                }
+                else if((R_MIndex < 4) && (REGIndex >= 4))
+                {
+                    RegistersValue[R_MIndex] = ((RegistersValue[R_MIndex] & 0xff00) |
+                                                ((RegistersValue[REGIndex - 4] & 0xff00) >> 8)); 
+                }
+                else if((R_MIndex >= 4) && (REGIndex < 4))
+                {
+                    RegistersValue[R_MIndex - 4] = ((RegistersValue[R_MIndex - 4] & 0x00ff) |
+                                                    ((RegistersValue[REGIndex] & 0x00ff) << 8)); 
+                }
+            }
+            else if(REGIndex < 7)
             {
                 if(REGIndex < 4)
                 {
-                    RegistersValue[REGIndex + 8] = ((RegistersValue[REGIndex + 8] & 0xff00) |
-                                                    RegistersValue[REGIndex]);
+                    RegistersValue[R_MIndex - 8] = ((RegistersValue[R_MIndex - 8] & 0xff00) |
+                                                   (RegistersValue[REGIndex] & 0x00ff));
                 }
                 else
                 {
-                    RegistersValue[REGIndex + 4] = ((RegistersValue[REGIndex + 4] & 0x00ff) |
-                                                    (RegistersValue[REGIndex] << 8));
+                    RegistersValue[R_MIndex - 8] = ((RegistersValue[R_MIndex - 8] & 0x00ff) |
+                                                    (RegistersValue[REGIndex - 4] & 0xff00));
                 }
-
-                if(R_MIndex < 4)
-                {
-                    RegistersValue[R_MIndex + 8] = ((RegistersValue[R_MIndex + 8] & 0xff00) |
-                                                    RegistersValue[R_MIndex]);
-                }
-                else
-                {
-                    RegistersValue[R_MIndex + 4] = ((RegistersValue[R_MIndex + 4] & 0x00ff) |
-                                                    (RegistersValue[R_MIndex] << 8));
-                }
+            }
+            else
+            {
+                RegistersValue[R_MIndex - 8] = RegistersValue[REGIndex - 8];
             }
 
             printf("mov %s, %s\n", Registers[R_MIndex], Registers[REGIndex]);
@@ -556,7 +584,7 @@ RegisterMemoryToSegmentRegister(uint16 Instruction, FILE* fp, char *Register_Mem
     {
 
         uint16 RegIndex = R_M | 8;
-        SegmentRegistersValue[SegRegIndex] = RegistersValue[RegIndex];
+        SegmentRegistersValue[SegRegIndex] = RegistersValue[RegIndex - 8];
         printf("mov %s, %s\n", SegmentRegisters[SegRegIndex], Registers[RegIndex]);
     }
 }
@@ -629,7 +657,7 @@ SegmentRegisterToRegisterMemory(uint16 Instruction, FILE* fp, char *Register_Mem
     {
 
         uint16 RegIndex = R_M | 8;
-        RegistersValue[RegIndex] = SegmentRegistersValue[SegRegIndex];
+        RegistersValue[RegIndex - 8] = SegmentRegistersValue[SegRegIndex];
         printf("mov %s, %s\n", Registers[RegIndex], SegmentRegisters[SegRegIndex]);
     }
 }
