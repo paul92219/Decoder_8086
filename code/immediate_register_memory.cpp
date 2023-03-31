@@ -520,10 +520,13 @@ ImmediateToRegister(uint16 Instruction, FILE* fp, char *Registers[], uint16 *Reg
         }
         else
         {
-            Data = Instruction & 0x0ff;
+            Data = Instruction & 0x00ff;
         }
         REG = REG | 8;
         RegistersValue[REG] = Data;
+        RegistersValue[REG - 8] = Data & 0x00ff;
+        RegistersValue[REG - 4] = Data >> 8;
+        
         printf("mov %s, %u\n", Registers[REG], Data);
     }
     else
@@ -536,7 +539,7 @@ ImmediateToRegister(uint16 Instruction, FILE* fp, char *Registers[], uint16 *Reg
         }
         else
         {
-            RegistersValue[REG + 4] = (RegistersValue[REG + 4] & 0xff00) | Data; 
+            RegistersValue[REG + 4] = (RegistersValue[REG + 4] & 0x00ff) | (Data << 8); 
         }
         printf("mov %s, %u\n", Registers[REG], Data);
     }

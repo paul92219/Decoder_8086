@@ -22,10 +22,6 @@ char *Registers[16] =
 {"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh",
  "ax", "cx", "dx", "bx", "sp", "bp", "si", "di"};
 
-uint16 RegistersValue[16] =
-{0, 0, 0, 0,  0, 0, 0, 0,
- 0, 0, 0, 0,  0, 0, 0, 0};
-
 char *Register_Memory[8] =
 {"[bx + si", "[bx + di", "[bp + si", "[bp + di",
  "[si", "[di", "[bp", "[bx"};
@@ -35,6 +31,13 @@ char *JumpInstructions[16] =
  "js", "jns", "jp", "jnp", "jl", "jnl", "jng", "jg"};
 
 char *LoopInstructions[4] = {"loopnz", "loopz", "loop", "jcxz"};
+
+char *SegmentRegisters[4] = {"es", "cs", "ss", "ds"};
+
+uint16 RegistersValue[16] = {0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 0};
+
+
+uint16 SegmentRegistersValue[4] = {0, 0, 0, 0};
 
 int main()
 {
@@ -46,7 +49,7 @@ int main()
     // Open the file in read binary mode
     fp = fopen(filename, "rb");
 
-    int num_values = 8; // Number of 16-bit values to read
+    int num_values = 20; // Number of 16-bit values to read
     
     // Check if the file was opened successfully
     if (fp == NULL) {
@@ -100,7 +103,12 @@ int main()
         {
             Operation = Instruction & 0xff00;
         }
-
+/*
+        else if(((Instruction & 0Xff00) == 0x8e00) || ((Instruction & 0Xff00) == 0x8c00))
+        {
+            Operation = Instruction & 0xff00;
+        }
+*/
         switch(Operation)
         {
             case 0x7000:
@@ -204,6 +212,19 @@ int main()
                 AddSubCmpImmediateToRegisterMemory(Instruction, Operation, fp,
                                                    Registers, Register_Memory);            
             } break;
+
+            case 0x8e00:
+            {
+                RegisterMemoryToSegmentRegister(Instruction, fp, Register_Memory, SegmentRegisters,
+                                                Registers, RegistersValue, SegmentRegistersValue);
+            } break;
+
+            case 0x8c00:
+            {
+                SegmentRegisterToRegisterMemory(Instruction, fp, Register_Memory, SegmentRegisters,
+                                                Registers, RegistersValue, SegmentRegistersValue);
+            } break;
+            
         }
     }
 
@@ -218,6 +239,14 @@ int main()
         }
         printf("    %s: 0x%x (%u)\n", Registers[RegIndex], (uint16)RegistersValue[RegIndex],
                RegistersValue[RegIndex]);
+    }
+
+    for(int SegRegIndex = 0;
+        SegRegIndex < 4;
+        ++SegRegIndex)
+    {
+        printf("    %s: 0x%x (%u)\n", SegmentRegisters[SegRegIndex],
+               (uint16)SegmentRegistersValue[SegRegIndex], SegmentRegistersValue[SegRegIndex]);
     }
     
     fclose(fp);

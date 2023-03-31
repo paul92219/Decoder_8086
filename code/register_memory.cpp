@@ -335,11 +335,62 @@ RegisterMemoryToFromRegister(uint16 Instruction, FILE* fp, char *Registers[], ch
         if(Instruction & DBitMask)
         {
             RegistersValue[REGIndex] = RegistersValue[R_MIndex];
+
+            if((REGIndex < 7) || (R_MIndex < 7))
+            {
+                if(REGIndex < 4)
+                {
+                    RegistersValue[REGIndex + 8] = ((RegistersValue[REGIndex + 8] & 0xff00) |
+                                                    RegistersValue[REGIndex]);
+                }
+                else
+                {
+                    RegistersValue[REGIndex + 4] = ((RegistersValue[REGIndex + 4] & 0x00ff) |
+                                                    (RegistersValue[REGIndex] << 8));
+                }
+
+                if(R_MIndex < 4)
+                {
+                    RegistersValue[R_MIndex + 8] = ((RegistersValue[R_MIndex + 8] & 0xff00) |
+                                                    RegistersValue[R_MIndex]);
+                }
+                else
+                {
+                    RegistersValue[R_MIndex + 4] = ((RegistersValue[R_MIndex + 4] & 0x00ff) |
+                                                    (RegistersValue[R_MIndex] << 8));
+                }
+            }
             printf("mov %s, %s\n", Registers[REGIndex], Registers[R_MIndex]);
         }
         else
         {
             RegistersValue[R_MIndex] = RegistersValue[REGIndex];
+
+            if((REGIndex < 7) || (R_MIndex < 7))
+            {
+                if(REGIndex < 4)
+                {
+                    RegistersValue[REGIndex + 8] = ((RegistersValue[REGIndex + 8] & 0xff00) |
+                                                    RegistersValue[REGIndex]);
+                }
+                else
+                {
+                    RegistersValue[REGIndex + 4] = ((RegistersValue[REGIndex + 4] & 0x00ff) |
+                                                    (RegistersValue[REGIndex] << 8));
+                }
+
+                if(R_MIndex < 4)
+                {
+                    RegistersValue[R_MIndex + 8] = ((RegistersValue[R_MIndex + 8] & 0xff00) |
+                                                    RegistersValue[R_MIndex]);
+                }
+                else
+                {
+                    RegistersValue[R_MIndex + 4] = ((RegistersValue[R_MIndex + 4] & 0x00ff) |
+                                                    (RegistersValue[R_MIndex] << 8));
+                }
+            }
+
             printf("mov %s, %s\n", Registers[R_MIndex], Registers[REGIndex]);
         }
     }
@@ -435,4 +486,150 @@ RegisterMemoryToFromRegister(uint16 Instruction, FILE* fp, char *Registers[], ch
     }
 
     return(RegistersValue);
+}
+
+void
+RegisterMemoryToSegmentRegister(uint16 Instruction, FILE* fp, char *Register_Memory[], char *SegmentRegisters[],
+                                char *Registers[], uint16 *RegistersValue, uint16 *SegmentRegistersValue)
+{
+    uint16 R_M = Instruction & 0x0007;
+
+    uint16 ModMask = 0x00c0;
+    uint16 MOD = (Instruction & ModMask) >> 6;
+
+    uint16 SegRegIndex = (Instruction & 0x0018) >> 3;
+    
+    unsigned char buffer[2];
+    unsigned char buf[1];
+
+    if(MOD == 0)
+    {
+        if(R_M == 6)
+        {
+            if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
+                printf("Failed to read data from file\n");
+                fclose(fp);
+      
+            }
+
+            uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
+            printf("mov %s, [%d]\n", SegmentRegisters[SegRegIndex], (signed short)TwoBytesDis);
+        }
+        else
+        {
+            printf("mov %s, %s]\n", (char *)SegmentRegisters[SegRegIndex], (char *)Register_Memory[R_M]);
+        }
+    }
+
+    else if(MOD == 1)
+    {
+        if (fread(buf, sizeof(buf), 1, fp) != 1) {
+            printf("Failed to read data from file\n");
+            fclose(fp);
+        }
+
+        uint8 OneByteDis = (uint8)buf[0]; 
+        if(OneByteDis)
+        {
+            printf("mov %s, %s %+d]\n", (char *)SegmentRegisters[SegRegIndex], (char *)Register_Memory[R_M],
+                   (signed char)OneByteDis);
+        }
+        else
+        {
+            printf("mov %s, %s]\n", (char *)SegmentRegisters[SegRegIndex], (char *)Register_Memory[R_M]);
+        }
+    }
+
+    else if(MOD == 2)
+    {
+        if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
+            printf("Failed to read data from file\n");
+            fclose(fp);
+        }
+
+        uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
+        printf("mov %s, %s %+d]\n", (char *)SegmentRegisters[SegRegIndex], (char *)Register_Memory[R_M],
+               (signed short)TwoBytesDis);
+    }
+    
+    else if(MOD == 3)
+    {
+
+        uint16 RegIndex = R_M | 8;
+        SegmentRegistersValue[SegRegIndex] = RegistersValue[RegIndex];
+        printf("mov %s, %s\n", SegmentRegisters[SegRegIndex], Registers[RegIndex]);
+    }
+}
+
+void
+SegmentRegisterToRegisterMemory(uint16 Instruction, FILE* fp, char *Register_Memory[], char *SegmentRegisters[],
+                                char *Registers[], uint16 *RegistersValue, uint16 *SegmentRegistersValue)
+{
+    uint16 R_M = Instruction & 0x0007;
+
+    uint16 ModMask = 0x00c0;
+    uint16 MOD = (Instruction & ModMask) >> 6;
+
+    uint16 SegRegIndex = (Instruction & 0x0018) >> 3;
+    
+    unsigned char buffer[2];
+    unsigned char buf[1];
+
+    if(MOD == 0)
+    {
+        if(R_M == 6)
+        {
+            if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
+                printf("Failed to read data from file\n");
+                fclose(fp);
+      
+            }
+
+            uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
+            printf("mov [%d], %s\n", (signed short)TwoBytesDis, SegmentRegisters[SegRegIndex]);
+        }
+        else
+        {
+            printf("mov %s], %s\n", (char *)Register_Memory[R_M], (char *)SegmentRegisters[SegRegIndex]);
+        }
+    }
+
+    else if(MOD == 1)
+    {
+        if (fread(buf, sizeof(buf), 1, fp) != 1) {
+            printf("Failed to read data from file\n");
+            fclose(fp);
+        }
+
+        uint8 OneByteDis = (uint8)buf[0]; 
+        if(OneByteDis)
+        {
+            printf("mov %s %+d], %s\n", (char *)Register_Memory[R_M], (signed char)OneByteDis,
+                   (char *)SegmentRegisters[SegRegIndex]);
+        }
+        else
+        {
+            printf("mov %s], %s\n", (char *)Register_Memory[R_M], (char *)SegmentRegisters[SegRegIndex]);
+        }
+    }
+
+    else if(MOD == 2)
+    {
+        if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
+            printf("Failed to read data from file\n");
+            fclose(fp);
+        }
+
+        uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
+        printf("mov %s %+d], %s\n", (char *)Register_Memory[R_M], (signed short)TwoBytesDis,
+               (char *)SegmentRegisters[SegRegIndex]);
+    }
+    
+    else if(MOD == 3)
+    {
+
+        uint16 RegIndex = R_M | 8;
+        RegistersValue[RegIndex] = SegmentRegistersValue[SegRegIndex];
+        printf("mov %s, %s\n", Registers[RegIndex], SegmentRegisters[SegRegIndex]);
+    }
 }
