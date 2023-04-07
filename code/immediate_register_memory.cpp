@@ -8,7 +8,8 @@
 
 void
 AddSubCmpImmediateToRegisterMemory(uint16 Instruction, uint16 Operation, FILE* fp,
-                                   char *Registers[], char *Register_Memory[])
+                                   char *Registers[], char *Register_Memory[],
+                                   uint16 *RegistersValue, uint16 *Flags)
 {
     uint16 WBitMask = 0x0100;
     uint16 SBitMask = 0x0200;
@@ -294,14 +295,71 @@ AddSubCmpImmediateToRegisterMemory(uint16 Instruction, uint16 Operation, FILE* f
 
             if(Operation == 0x8000)
             {
+                RegistersValue[REGIndex - 8] += Data;
+                if(RegistersValue[REGIndex - 8] == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(RegistersValue[REGIndex - 8] & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("add %s, %d\n", Registers[REGIndex], (signed short)Data);            
             }
             else if(Operation == 0x8038)
             {
+                uint16 Result = RegistersValue[REGIndex - 8] - Data;
+                if(RegistersValue[REGIndex - 8] == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(RegistersValue[REGIndex - 8] & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("cmp %s, %d\n", Registers[REGIndex], (signed short)Data);            
             }
             else
             {
+                RegistersValue[REGIndex - 8] -= Data;
+                if(RegistersValue[REGIndex - 8] == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(RegistersValue[REGIndex - 8] & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("sub %s, %d\n", Registers[REGIndex], (signed short)Data);            
             }
         }
@@ -317,14 +375,71 @@ AddSubCmpImmediateToRegisterMemory(uint16 Instruction, uint16 Operation, FILE* f
 
             if(Operation == 0x8000)
             {
+                RegistersValue[REGIndex - 8] += Data;
+                if(RegistersValue[REGIndex - 8] == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(RegistersValue[REGIndex - 8] & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("add %s, %d\n", Registers[REGIndex], (signed char)Data);
             }
             else if(Operation == 0x8038)
             {
+                uint16 Result = RegistersValue[REGIndex - 8] - Data;
+                if(RegistersValue[REGIndex - 8] == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(RegistersValue[REGIndex - 8] & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("cmp %s, %d\n", Registers[REGIndex], (signed char)Data);
             }
             else
             {
+                RegistersValue[REGIndex - 8] -= Data;
+                if(RegistersValue[REGIndex - 8] == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(RegistersValue[REGIndex - 8] & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("sub %s, %d\n", Registers[REGIndex], (signed char)Data);
             }
         }

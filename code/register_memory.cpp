@@ -8,7 +8,7 @@
 
 void
 AddSubCmpRegisterMemoryToFromRegister(uint16 Instruction, uint16 Operation, FILE* fp, char *Registers[],
-                                      char *Register_Memory[])
+                                      char *Register_Memory[], uint16 *RegistersValue, uint16 *Flags)
 {
     uint16 DBitMask = 0x0200;
     uint16 WBitMask = 0x0100;
@@ -52,14 +52,71 @@ AddSubCmpRegisterMemoryToFromRegister(uint16 Instruction, uint16 Operation, FILE
         {
             if(Operation == 0x0000)
             {
+                RegistersValue[REGIndex - 8] += RegistersValue[R_MIndex - 8];
+                if(RegistersValue[REGIndex - 8] == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(RegistersValue[REGIndex - 8] & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+                
                 printf("add %s, %s\n", Registers[REGIndex], Registers[R_MIndex]);
             }
             else if(Operation == 0x3800)
             {
+                uint16 Result = RegistersValue[REGIndex - 8] - RegistersValue[R_MIndex - 8];
+                if(Result == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(Result & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("cmp %s, %s\n", Registers[REGIndex], Registers[R_MIndex]);
             }
             else
             {
+                RegistersValue[REGIndex - 8] -= RegistersValue[R_MIndex - 8];
+                if(RegistersValue[REGIndex - 8] == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(RegistersValue[REGIndex - 8] & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("sub %s, %s\n", Registers[REGIndex], Registers[R_MIndex]);
             }
         }
@@ -67,14 +124,71 @@ AddSubCmpRegisterMemoryToFromRegister(uint16 Instruction, uint16 Operation, FILE
         {
             if(Operation == 0x0000)
             {
+                RegistersValue[R_MIndex - 8] += RegistersValue[REGIndex - 8];
+                if(RegistersValue[R_MIndex - 8] == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(RegistersValue[R_MIndex - 8] & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("add %s, %s\n", Registers[R_MIndex], Registers[REGIndex]);
             }
             else if(Operation == 0x3800)
             {
+                uint16 Result = RegistersValue[R_MIndex - 8] - RegistersValue[REGIndex - 8];
+                if(Result == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(Result & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("cmp %s, %s\n", Registers[R_MIndex], Registers[REGIndex]);
             }
             else
             {
+                RegistersValue[R_MIndex - 8] -= RegistersValue[REGIndex - 8];
+                if(RegistersValue[R_MIndex - 8] == 0)
+                {
+                    *Flags |= 0x0040;
+                }
+                else
+                {
+                    *Flags &= 0x0080;
+                }
+                
+                if(RegistersValue[R_MIndex - 8] & 0x8000)
+                {
+                    *Flags |= 0x0080; 
+                }
+                else
+                {
+                    *Flags &= 0x0040;
+                }
+
                 printf("sub %s, %s\n", Registers[R_MIndex], Registers[REGIndex]);
             }
         }

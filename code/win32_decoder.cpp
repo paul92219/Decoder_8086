@@ -39,17 +39,19 @@ uint16 RegistersValue[8] = {0, 0, 0, 0,  0, 0, 0, 0};
 
 uint16 SegmentRegistersValue[4] = {0, 0, 0, 0};
 
+uint16 Flags = 0;
+
 int main()
 {
     FILE* fp;
     uint16 Instruction;
-    char filename[] = "D:\\Projects\\Decoder_8086\\data\\listing_45";
+    char filename[] = "D:\\Projects\\Decoder_8086\\data\\listing_46";
 
 
     // Open the file in read binary mode
     fp = fopen(filename, "rb");
 
-    int num_values = 20; // Number of 16-bit values to read
+    int num_values = 8; // Number of 16-bit values to read
     
     // Check if the file was opened successfully
     if (fp == NULL) {
@@ -164,8 +166,8 @@ int main()
 
             case 0x0000:
             {
-                AddSubCmpRegisterMemoryToFromRegister(Instruction, Operation, fp,
-                                                      Registers, Register_Memory);
+                AddSubCmpRegisterMemoryToFromRegister(Instruction, Operation, fp, Registers,
+                                                      Register_Memory, RegistersValue, &Flags);
             } break;
 
             case 0x0400:
@@ -176,13 +178,13 @@ int main()
             case 0x8000:
             {
                 AddSubCmpImmediateToRegisterMemory(Instruction, Operation, fp,
-                                                   Registers, Register_Memory);            
+                                                   Registers, Register_Memory, RegistersValue, &Flags);            
             } break;
 
             case 0x2800:
             {
-                AddSubCmpRegisterMemoryToFromRegister(Instruction, Operation, fp,
-                                                      Registers, Register_Memory);
+                AddSubCmpRegisterMemoryToFromRegister(Instruction, Operation, fp, Registers,
+                                                      Register_Memory, RegistersValue, &Flags);
             } break;
 
             case 0x2c00:
@@ -193,13 +195,13 @@ int main()
             case 0x8028:
             {
                 AddSubCmpImmediateToRegisterMemory(Instruction, Operation, fp,
-                                                   Registers, Register_Memory);            
+                                                   Registers, Register_Memory, RegistersValue, &Flags);            
             } break;
 
             case 0x3800:
             {
-                AddSubCmpRegisterMemoryToFromRegister(Instruction, Operation, fp,
-                                                      Registers, Register_Memory);
+                AddSubCmpRegisterMemoryToFromRegister(Instruction, Operation, fp, Registers,
+                                                      Register_Memory, RegistersValue, &Flags);
             } break;
 
             case 0x3c00:
@@ -210,7 +212,7 @@ int main()
             case 0x8038:
             {
                 AddSubCmpImmediateToRegisterMemory(Instruction, Operation, fp,
-                                                   Registers, Register_Memory);            
+                                                   Registers, Register_Memory, RegistersValue, &Flags);            
             } break;
 
             case 0x8e00:
@@ -248,6 +250,8 @@ int main()
         printf("    %s: 0x%x (%u)\n", SegmentRegisters[SegRegIndex],
                (uint16)SegmentRegistersValue[SegRegIndex], SegmentRegistersValue[SegRegIndex]);
     }
+
+    printf("Flags: %x", Flags);
     
     fclose(fp);
     
