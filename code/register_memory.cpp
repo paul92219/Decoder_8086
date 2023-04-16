@@ -6,772 +6,663 @@
    $Notice: (C) Copyright 2014 by Molly Rocket, Inc. All Rights Reserved. $
    ======================================================================== */
 
-void
-AddSubCmpRegisterMemoryToFromRegister(uint16 Instruction, uint16 Operation, FILE* fp, char *Registers[],
-                                      char *Register_Memory[], uint16 *RegistersValue, uint16 *Flags)
+struct print_content
 {
-    uint16 DBitMask = 0x0200;
-    uint16 WBitMask = 0x0100;
+    char Source[32];
+    char Dest[32];
+    char *Operation;
+};
 
-    uint16 REG = Instruction & 0x0038;
-    REG = REG >> 3;
-    uint16 R_M = Instruction & 0x0007;
+void
+PrintInstruction(print_content PC)
+{
+    printf("%s %s, %s\n", PC.Operation, PC.Dest, PC.Source);
+}
 
-    uint16 ModMask = 0x00c0;
-    uint16 MOD = (Instruction & ModMask) >> 6;
-
-    unsigned char buffer[2];
-    unsigned char buf[1];
-    
-//        printf("REG: %u\nR/M: %x\nMOD: %x\n", REG, R_M, MOD);
-    
-    uint16 REGIndex = 0; 
-    if(Instruction & WBitMask)
+void
+JumpAndLoop(instruction_content Content, registers *Registers, values *Values)
+{
+    if(Content.OpCode > 0x7f)
     {
-        REGIndex = 8 | REG;  
+        int Index = Content.OpCode - 224;
+        uint8 IP = Content.Data;
+        char *Ins = Registers->LoopInstructions[Index];
+        printf("%s $+%u\n", Ins, IP + 2);
     }
     else
     {
-        REGIndex = REG;
-    }
-    
-    if(MOD == 3)
-    {
-
-        uint16 R_MIndex = 0;
-        if(Instruction & WBitMask)
+        int Index = Content.OpCode - 112;
+        if((Content.OpCode == 0x75) && !(Values->Flags & 0x0040))
         {
-            R_MIndex = 8 | R_M;
+            Values->IPRegister += (signed char)Content.Data;
+            char *Ins = Registers->JumpInstructions[Index];
+            printf("%s $%+d\n", Ins, (signed char)Content.Data + 2);
         }
         else
         {
-            R_MIndex = R_M;
-        }
-
-        if(Instruction & DBitMask)
-        {
-            if(Operation == 0x0000)
-            {
-                RegistersValue[REGIndex - 8] += RegistersValue[R_MIndex - 8];
-                if(RegistersValue[REGIndex - 8] == 0)
-                {
-                    *Flags |= 0x0040;
-                }
-                else
-                {
-                    *Flags &= 0x0080;
-                }
-                
-                if(RegistersValue[REGIndex - 8] & 0x8000)
-                {
-                    *Flags |= 0x0080; 
-                }
-                else
-                {
-                    *Flags &= 0x0040;
-                }
-                
-                printf("add %s, %s\n", Registers[REGIndex], Registers[R_MIndex]);
-            }
-            else if(Operation == 0x3800)
-            {
-                uint16 Result = RegistersValue[REGIndex - 8] - RegistersValue[R_MIndex - 8];
-                if(Result == 0)
-                {
-                    *Flags |= 0x0040;
-                }
-                else
-                {
-                    *Flags &= 0x0080;
-                }
-                
-                if(Result & 0x8000)
-                {
-                    *Flags |= 0x0080; 
-                }
-                else
-                {
-                    *Flags &= 0x0040;
-                }
-
-                printf("cmp %s, %s\n", Registers[REGIndex], Registers[R_MIndex]);
-            }
-            else
-            {
-                RegistersValue[REGIndex - 8] -= RegistersValue[R_MIndex - 8];
-                if(RegistersValue[REGIndex - 8] == 0)
-                {
-                    *Flags |= 0x0040;
-                }
-                else
-                {
-                    *Flags &= 0x0080;
-                }
-                
-                if(RegistersValue[REGIndex - 8] & 0x8000)
-                {
-                    *Flags |= 0x0080; 
-                }
-                else
-                {
-                    *Flags &= 0x0040;
-                }
-
-                printf("sub %s, %s\n", Registers[REGIndex], Registers[R_MIndex]);
-            }
-        }
-        else
-        {
-            if(Operation == 0x0000)
-            {
-                RegistersValue[R_MIndex - 8] += RegistersValue[REGIndex - 8];
-                if(RegistersValue[R_MIndex - 8] == 0)
-                {
-                    *Flags |= 0x0040;
-                }
-                else
-                {
-                    *Flags &= 0x0080;
-                }
-                
-                if(RegistersValue[R_MIndex - 8] & 0x8000)
-                {
-                    *Flags |= 0x0080; 
-                }
-                else
-                {
-                    *Flags &= 0x0040;
-                }
-
-                printf("add %s, %s\n", Registers[R_MIndex], Registers[REGIndex]);
-            }
-            else if(Operation == 0x3800)
-            {
-                uint16 Result = RegistersValue[R_MIndex - 8] - RegistersValue[REGIndex - 8];
-                if(Result == 0)
-                {
-                    *Flags |= 0x0040;
-                }
-                else
-                {
-                    *Flags &= 0x0080;
-                }
-                
-                if(Result & 0x8000)
-                {
-                    *Flags |= 0x0080; 
-                }
-                else
-                {
-                    *Flags &= 0x0040;
-                }
-
-                printf("cmp %s, %s\n", Registers[R_MIndex], Registers[REGIndex]);
-            }
-            else
-            {
-                RegistersValue[R_MIndex - 8] -= RegistersValue[REGIndex - 8];
-                if(RegistersValue[R_MIndex - 8] == 0)
-                {
-                    *Flags |= 0x0040;
-                }
-                else
-                {
-                    *Flags &= 0x0080;
-                }
-                
-                if(RegistersValue[R_MIndex - 8] & 0x8000)
-                {
-                    *Flags |= 0x0080; 
-                }
-                else
-                {
-                    *Flags &= 0x0040;
-                }
-
-                printf("sub %s, %s\n", Registers[R_MIndex], Registers[REGIndex]);
-            }
-        }
-    }
-
-    else if(MOD == 1)
-    {
-        if (fread(buf, sizeof(buf), 1, fp) != 1) {
-            printf("Failed to read data from file\n");
-            fclose(fp);
-        }
-
-        uint8 OneByteDis = (uint8)buf[0]; 
-
-        if(Instruction & DBitMask)
-        {
-            if(OneByteDis)
-            {
-                if(Operation == 0x0000)
-                {
-                    printf("add %s, %s %+d]\n", Registers[REGIndex], Register_Memory[R_M],
-                           (signed char)OneByteDis);
-                }
-                else if(Operation == 0x3800)
-                {
-                    printf("cmp %s, %s %+d]\n", Registers[REGIndex], Register_Memory[R_M],
-                           (signed char)OneByteDis);
-                }
-                else
-                {
-                    printf("sub %s, %s %+d]\n", Registers[REGIndex], Register_Memory[R_M],
-                           (signed char)OneByteDis);
-                }
-            }
-            else
-            {
-                if(Operation == 0x0000)
-                {
-                    printf("add %s, %s]\n", Registers[REGIndex], Register_Memory[R_M]);
-                }
-                else if(Operation == 0x3800)
-                {
-                    printf("cmp %s, %s]\n", Registers[REGIndex], Register_Memory[R_M]);
-                }
-                else
-                {
-                    printf("sub %s, %s]\n", Registers[REGIndex], Register_Memory[R_M]);
-                }
-            }
-        }
-        else
-        {
-            if(OneByteDis)
-            {
-                if(Operation == 0x0000)
-                {
-                    printf("add %s %+d], %s\n", Register_Memory[R_M], (signed char)OneByteDis,
-                           Registers[REGIndex]);
-                }
-                else if(Operation == 0x3800)
-                {
-                    printf("cmp %s %+d], %s\n", Register_Memory[R_M], (signed char)OneByteDis,
-                           Registers[REGIndex]);
-                }
-                else
-                {
-                    printf("sub %s %+d], %s\n", Register_Memory[R_M], (signed char)OneByteDis,
-                           Registers[REGIndex]);
-                }
-            }
-            else
-            {
-                if(Operation == 0x0000)
-                {
-                    printf("add %s], %s\n", Register_Memory[R_M], Registers[REGIndex]);
-                }
-                else if(Operation == 0x3800)
-                {
-                    printf("cmp %s], %s\n", Register_Memory[R_M], Registers[REGIndex]);
-                }
-                else
-                {
-                    printf("sub %s], %s\n", Register_Memory[R_M], Registers[REGIndex]);
-                }
-            }
-        }
-    }
-
-    else if(MOD == 2)
-    {
-        if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
-            printf("Failed to read data from file\n");
-            fclose(fp);
-        }
-
-        uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
-
-        if(Instruction & DBitMask)
-        {
-            if(Operation == 0x0000)
-            {
-                printf("add %s, %s %+d]\n", Registers[REGIndex], Register_Memory[R_M],
-                       (signed short)TwoBytesDis);
-            }
-            else if(Operation == 0x3800)
-            {
-                printf("cmp %s, %s %+d]\n", Registers[REGIndex], Register_Memory[R_M],
-                       (signed short)TwoBytesDis);
-            }
-            else
-            {
-                printf("sub %s, %s %+d]\n", Registers[REGIndex], Register_Memory[R_M],
-                       (signed short)TwoBytesDis);
-            }
-        }
-        else
-        {
-            if(Operation == 0x0000)
-            {
-                printf("add %s %+d], %s\n", Register_Memory[R_M], (signed short)TwoBytesDis,
-                       Registers[REGIndex]);
-            }
-            else if(Operation == 0x3800)
-            {
-                printf("cmp %s %+d], %s\n", Register_Memory[R_M], (signed short)TwoBytesDis,
-                       Registers[REGIndex]);
-            }
-            else
-            {
-                printf("sub %s %+d], %s\n", Register_Memory[R_M], (signed short)TwoBytesDis,
-                       Registers[REGIndex]);
-            }
-        }
-    }
-    else if(MOD == 0)
-    {
-        if(R_M == 6)
-        {
-            if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
-                printf("Failed to read data from file\n");
-                fclose(fp);
-      
-            }
-
-            uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
-
-            if(Instruction & DBitMask)
-            {
-                if(Operation == 0x0000)
-                {
-                    printf("add %s, [%d]\n", Registers[REGIndex], (signed short)TwoBytesDis);
-                }
-                else if(Operation == 0x3800)
-                {
-                    printf("cmp %s, [%d]\n", Registers[REGIndex], (signed short)TwoBytesDis);
-                }
-                else
-                {
-                    printf("sub %s, [%d]\n", Registers[REGIndex], (signed short)TwoBytesDis);
-                }
-            }
-            else
-            {
-                if(Operation == 0x0000)
-                {
-                    printf("add [%d], %s\n", (signed short)TwoBytesDis, Registers[REGIndex]);
-                }
-                else if(Operation == 0x3800)
-                {
-                    printf("cmp [%d], %s\n", (signed short)TwoBytesDis, Registers[REGIndex]);
-                }
-                else
-                {
-                    printf("sub [%d], %s\n", (signed short)TwoBytesDis, Registers[REGIndex]);
-                }
-            }
-        }
-        else
-        {
-            if(Instruction & DBitMask)
-            {
-                if(Operation == 0x0000)
-                {
-                    printf("add %s, %s]\n", Registers[REGIndex], Register_Memory[R_M]);
-                }
-                else if(Operation == 0x3800)
-                {
-                    printf("cmp %s, %s]\n", Registers[REGIndex], Register_Memory[R_M]);
-                }
-                else
-                {
-                    printf("sub %s, %s]\n", Registers[REGIndex], Register_Memory[R_M]);
-                }
-            }
-            else
-            {
-                if(Operation == 0x0000)
-                {
-                    printf("add %s], %s\n", Register_Memory[R_M], Registers[REGIndex]);
-                }
-                else if(Operation == 0x3800)
-                {
-                    printf("cmp %s], %s\n", Register_Memory[R_M], Registers[REGIndex]);
-                }
-                else
-                {
-                    printf("sub %s], %s\n", Register_Memory[R_M], Registers[REGIndex]);
-                }
-            }
-
+            uint8 IP = Content.Data;
+            char *Ins = Registers->JumpInstructions[Index];
+            printf("%s $%+d\n", Ins, (signed char)IP + 2);
         }
     }
 }
 
-uint16 *
-RegisterMemoryToFromRegister(uint16 Instruction, FILE* fp, char *Registers[], char *Register_Memory[],
-                             uint16 *RegistersValue)
+void
+ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Values, uint16 Data,
+                   uint8 WBit)
 {
-    uint16 DBitMask = 0x0200;
-    uint16 WBitMask = 0x0100;
+    switch(OpCode)
+    {
+        case 0x88:
+        {
+            if(!WBit)
+            {
+                if((DestIndex < 4) && (SourceIndex < 4))
+                {
+                    Values->RegistersValue[DestIndex] =
+                        ((Values->RegistersValue[DestIndex] & 0xff00) |
+                         (Values->RegistersValue[SourceIndex] & 0x00ff)); 
+                }
+                else if((DestIndex >= 4) && (SourceIndex >= 4))
+                {
+                    DestIndex -= 4;
+                    SourceIndex -= 4;
+                    Values->RegistersValue[DestIndex] =
+                        ((Values->RegistersValue[DestIndex] & 0x00ff) |
+                         (Values->RegistersValue[SourceIndex] & 0xff00)); 
+                }
+                else if((DestIndex < 4) && (SourceIndex >= 4))
+                {
+                    SourceIndex -= 4;
+                    Values->RegistersValue[DestIndex] =
+                        ((Values->RegistersValue[DestIndex] & 0xff00) |
+                         ((Values->RegistersValue[SourceIndex] & 0xff00) >> 8)); 
+                }
+                else if((DestIndex >= 4) && (SourceIndex < 4))
+                {
+                    DestIndex -= 4;
+                    Values->RegistersValue[DestIndex] =
+                        ((Values->RegistersValue[DestIndex] & 0x00ff) |
+                         ((Values->RegistersValue[SourceIndex] & 0x00ff) << 8)); 
+                }
+            }
+            else
+            {
+                Values->RegistersValue[DestIndex] =
+                    Values->RegistersValue[SourceIndex];
+            }
 
-    uint16 REG = Instruction & 0x0038;
-    REG = REG >> 3;
-    uint16 R_M = Instruction & 0x0007;
+        } break;
 
-    uint16 ModMask = 0x00c0;
-    uint16 MOD = (Instruction & ModMask) >> 6;
+        case 0x00:
+        {
+            Values->RegistersValue[DestIndex] += Values->RegistersValue[SourceIndex];
+            if(Values->RegistersValue[DestIndex] == 0)
+            {
+                Values->Flags |= 0x0040;
+            }
+            else
+            {
+                Values->Flags &= 0x0080;
+            }
+                
+            if(Values->RegistersValue[DestIndex] & 0x8000)
+            {
+                Values->Flags |= 0x0080; 
+            }
+            else
+            {
+                Values->Flags &= 0x0040;
+            }
 
-    unsigned char buffer[2];
-    unsigned char buf[1];
-    
-//        printf("REG: %u\nR/M: %x\nMOD: %x\n", REG, R_M, MOD);
-
+        } break;
         
-    uint16 REGIndex = 0; 
-    if(Instruction & WBitMask)
-    {
-        REGIndex = 8 | REG;  
-    }
-    else
-    {
-        REGIndex = REG;
-    }
-    
-    if(MOD == 3)
-    {
-
-        uint16 R_MIndex = 0;
-        if(Instruction & WBitMask)
+        case 0x38:
         {
-            R_MIndex = 8 | R_M;
-        }
-        else
-        {
-            R_MIndex = R_M;
-        }
-
-        if(Instruction & DBitMask)
-        {
-            if((REGIndex < 7) && (R_MIndex < 7))
+            uint16 Result = Values->RegistersValue[DestIndex] - Values->RegistersValue[SourceIndex];
+            if(Result == 0)
             {
-                if((REGIndex < 4) && (R_MIndex < 4))
-                {
-                    RegistersValue[REGIndex] = ((RegistersValue[REGIndex] & 0xff00) |
-                                                (RegistersValue[R_MIndex] & 0x00ff)); 
-                }
-                else if((REGIndex >= 4) && (R_MIndex >= 4))
-                {
-                    RegistersValue[REGIndex - 4] = ((RegistersValue[REGIndex - 4] & 0x00ff) |
-                                                    (RegistersValue[R_MIndex - 4] & 0xff00)); 
-                }
-                else if((REGIndex < 4) && (R_MIndex >= 4))
-                {
-                    RegistersValue[REGIndex] = ((RegistersValue[REGIndex] & 0xff00) |
-                                                ((RegistersValue[R_MIndex - 4] & 0xff00) >> 8)); 
-                }
-                else if((REGIndex >= 4) && (R_MIndex < 4))
-                {
-                    RegistersValue[REGIndex - 4] = ((RegistersValue[REGIndex - 4] & 0x00ff) |
-                                                    ((RegistersValue[R_MIndex] & 0x00ff) << 8)); 
-                }
-            }
-            else if(R_MIndex < 7)
-            {
-                if(R_MIndex < 4)
-                {
-                    RegistersValue[REGIndex - 8] = ((RegistersValue[REGIndex - 8] & 0xff00) |
-                                                   (RegistersValue[R_MIndex] & 0x00ff));
-                }
-                else
-                {
-                    RegistersValue[REGIndex - 8] = ((RegistersValue[REGIndex - 8] & 0x00ff) |
-                                                    (RegistersValue[R_MIndex - 4] & 0xff00));
-                }
+                Values->Flags |= 0x0040;
             }
             else
             {
-                RegistersValue[REGIndex - 8] = RegistersValue[R_MIndex - 8];
+                Values->Flags &= 0x0080;
             }
-            printf("mov %s, %s\n", Registers[REGIndex], Registers[R_MIndex]);
-        }
-        else
-        {
-            if((R_MIndex < 7) && (REGIndex < 7))
+                
+            if(Result & 0x8000)
             {
-                if((R_MIndex < 4) && (REGIndex < 4))
-                {
-                    RegistersValue[R_MIndex] = ((RegistersValue[R_MIndex] & 0xff00) |
-                                                (RegistersValue[REGIndex] & 0x00ff)); 
-                }
-                else if((R_MIndex >= 4) && (REGIndex >= 4))
-                {
-                    RegistersValue[R_MIndex - 4] = ((RegistersValue[R_MIndex - 4] & 0x00ff) |
-                                                    (RegistersValue[REGIndex - 4] & 0xff00)); 
-                }
-                else if((R_MIndex < 4) && (REGIndex >= 4))
-                {
-                    RegistersValue[R_MIndex] = ((RegistersValue[R_MIndex] & 0xff00) |
-                                                ((RegistersValue[REGIndex - 4] & 0xff00) >> 8)); 
-                }
-                else if((R_MIndex >= 4) && (REGIndex < 4))
-                {
-                    RegistersValue[R_MIndex - 4] = ((RegistersValue[R_MIndex - 4] & 0x00ff) |
-                                                    ((RegistersValue[REGIndex] & 0x00ff) << 8)); 
-                }
-            }
-            else if(REGIndex < 7)
-            {
-                if(REGIndex < 4)
-                {
-                    RegistersValue[R_MIndex - 8] = ((RegistersValue[R_MIndex - 8] & 0xff00) |
-                                                   (RegistersValue[REGIndex] & 0x00ff));
-                }
-                else
-                {
-                    RegistersValue[R_MIndex - 8] = ((RegistersValue[R_MIndex - 8] & 0x00ff) |
-                                                    (RegistersValue[REGIndex - 4] & 0xff00));
-                }
+                Values->Flags |= 0x0080; 
             }
             else
             {
-                RegistersValue[R_MIndex - 8] = RegistersValue[REGIndex - 8];
+                Values->Flags &= 0x0040;
             }
 
-            printf("mov %s, %s\n", Registers[R_MIndex], Registers[REGIndex]);
-        }
-    }
-
-    else if(MOD == 1)
-    {
-        if (fread(buf, sizeof(buf), 1, fp) != 1) {
-            printf("Failed to read data from file\n");
-            fclose(fp);
-        }
-
-        uint8 OneByteDis = (uint8)buf[0]; 
-
-        if(Instruction & DBitMask)
+        } break;
+        
+        case 0x28:
         {
-            if(OneByteDis)
+            Values->RegistersValue[DestIndex] -= Values->RegistersValue[SourceIndex];
+            if(Values->RegistersValue[DestIndex] == 0)
             {
-                printf("mov %s, %s %+d]\n", (char *)Registers[REGIndex], (char *)Register_Memory[R_M],
-                       (signed char)OneByteDis);
+                Values->Flags |= 0x0040;
             }
             else
             {
-                printf("mov %s, %s]\n", (char *)Registers[REGIndex], (char *)Register_Memory[R_M]);
+                Values->Flags &= 0x0080;
             }
-        }
-        else
-        {
-            if(OneByteDis)
+                
+            if(Values->RegistersValue[DestIndex] & 0x8000)
             {
-                printf("mov %s %+d], %s\n", (char *)Register_Memory[R_M], (signed char)OneByteDis,
-                       (char *)Registers[REGIndex]);
+                Values->Flags |= 0x0080; 
             }
             else
             {
-                printf("mov %s], %s\n", (char *)Register_Memory[R_M], (char *)Registers[REGIndex]);
+                Values->Flags &= 0x0040;
             }
-        }
-    }
+            
+        } break;
 
-    else if(MOD == 2)
-    {
-        if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
-            printf("Failed to read data from file\n");
-            fclose(fp);
-        }
-
-        uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
-
-        if(Instruction & DBitMask)
+        case 0x8000:
         {
-            printf("mov %s, %s %+d]\n", (char *)Registers[REGIndex], (char *)Register_Memory[R_M],
-                   (signed short)TwoBytesDis);
-        }
-        else
-        {
-            printf("mov %s %+d], %s\n", (char *)Register_Memory[R_M], (signed short)TwoBytesDis,
-                   (char *)Registers[REGIndex]);
-        }
-    }
-    else if(MOD == 0)
-    {
-        if(R_M == 6)
-        {
-            if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
-                printf("Failed to read data from file\n");
-                fclose(fp);
-      
-            }
-
-            uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
-
-            if(Instruction & DBitMask)
+            Values->RegistersValue[DestIndex] += Data;
+            if(Values->RegistersValue[DestIndex] == 0)
             {
-                printf("mov %s, [%d]\n", Registers[REGIndex], (signed short)TwoBytesDis);
+                Values->Flags |= 0x0040;
             }
             else
             {
-                printf("mov [%d], %s\n", (signed short)TwoBytesDis, Registers[REGIndex]);
+                Values->Flags &= 0x0080;
             }
-        }
-        else
-        {
-            if(Instruction & DBitMask)
+                
+            if(Values->RegistersValue[DestIndex] & 0x8000)
             {
-                printf("mov %s, %s]\n", (char *)Registers[REGIndex], (char *)Register_Memory[R_M]);
+                Values->Flags |= 0x0080; 
             }
             else
             {
-                printf("mov %s], %s\n", (char *)Register_Memory[R_M], (char *)Registers[REGIndex]);
+                Values->Flags &= 0x0040;
             }
 
-        }
-    }
+        } break;
 
-    return(RegistersValue);
+        case 0x8038:
+        {
+            uint16 Result = Values->RegistersValue[DestIndex] - Data;
+            if(Values->RegistersValue[DestIndex] == 0)
+            {
+                Values->Flags |= 0x0040;
+            }
+            else
+            {
+                Values->Flags &= 0x0080;
+            }
+                
+            if(Values->RegistersValue[DestIndex] & 0x8000)
+            {
+                Values->Flags |= 0x0080; 
+            }
+            else
+            {
+                Values->Flags &= 0x0040;
+            }
+
+        } break;
+
+        case 0x8028:
+        {
+            Values->RegistersValue[DestIndex] -= Data;
+            if(Values->RegistersValue[DestIndex] == 0)
+            {
+                Values->Flags |= 0x0040;
+            }
+            else
+            {
+                Values->Flags &= 0x0080;
+            }
+                
+            if(Values->RegistersValue[DestIndex] & 0x8000)
+            {
+                Values->Flags |= 0x0080; 
+            }
+            else
+            {
+                Values->Flags &= 0x0040;
+            }
+
+        } break;
+
+        case 0x04:
+        case 0x2c:
+        {
+            if(WBit)
+            {
+                Values->RegistersValue[0] += Data;
+            }
+            else
+            {
+                uint8 LowPart = (Values->RegistersValue[0] & 0x00ff) + Data;
+                Values->RegistersValue[0] = (Values->RegistersValue[0] & 0xff00) | LowPart; 
+            }
+            
+        } break;
+    };
 }
 
 void
-RegisterMemoryToSegmentRegister(uint16 Instruction, FILE* fp, char *Register_Memory[], char *SegmentRegisters[],
-                                char *Registers[], uint16 *RegistersValue, uint16 *SegmentRegistersValue)
+DetermineOperation(instruction_content Content, registers *Registers, values *RegistersValues)
 {
-    uint16 R_M = Instruction & 0x0007;
-
-    uint16 ModMask = 0x00c0;
-    uint16 MOD = (Instruction & ModMask) >> 6;
-
-    uint16 SegRegIndex = (Instruction & 0x0018) >> 3;
+    print_content PC = {};
     
-    unsigned char buffer[2];
-    unsigned char buf[1];
-
-    if(MOD == 0)
+    switch(Content.OpCode)
     {
-        if(R_M == 6)
+        case 0x8c:
+        case 0x8e:
         {
-            if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
-                printf("Failed to read data from file\n");
-                fclose(fp);
-      
+            PC.Operation = "mov";
+            if(Content.DirectAddress)
+            {
+                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                if(Content.OpCode == 0x8e)
+                {
+                    sprintf(PC.Dest, "%s", Registers->SegmentRegisters[Content.SR]);
+                    sprintf(PC.Source, "[%d]", (signed short)TwoBytesDis);
+                }
+                else
+                {
+                    sprintf(PC.Dest, "[%d]", (signed short)TwoBytesDis);
+                    sprintf(PC.Source, "%s", Registers->SegmentRegisters[Content.SR]);
+                }
+            }
+            else if(Content.MOD == 0)
+            {
+                if(Content.OpCode == 0x8e)
+                {
+                    sprintf(PC.Dest, "%s", Registers->SegmentRegisters[Content.SR]);
+                    sprintf(PC.Source, "%s]", Registers->Register_Memory[Content.R_M]);
+                }
+                else
+                {
+                    sprintf(PC.Dest, "%s]", Registers->Register_Memory[Content.R_M]);
+                    sprintf(PC.Source, "%s", Registers->SegmentRegisters[Content.SR]);
+                }
+            }
+            else if(Content.MOD == 1)
+            {
+                uint8 OneByteDis = Content.DispLow; 
+                if(Content.OpCode == 0x8e)
+                {
+                    sprintf(PC.Dest, "%s", Registers->SegmentRegisters[Content.SR]);
+                    sprintf(PC.Source, "%s %+d]", Registers->Register_Memory[Content.R_M],
+                            (signed char)OneByteDis);
+                }
+                else
+                {
+                    sprintf(PC.Dest, "%s %+d]", Registers->Register_Memory[Content.R_M],
+                            (signed char)OneByteDis);
+                    sprintf(PC.Source, "%s", Registers->SegmentRegisters[Content.SR]);
+                }
+            }
+            else if(Content.MOD == 2)
+            {
+                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                if(Content.OpCode == 0x8e)
+                {
+                    sprintf(PC.Dest, "%s", Registers->SegmentRegisters[Content.SR]);
+                    sprintf(PC.Source, "%s %+d]", Registers->Register_Memory[Content.R_M],
+                            (signed short)TwoBytesDis);
+                }
+                else
+                {
+                    sprintf(PC.Dest, "%s %+d]", Registers->Register_Memory[Content.R_M],
+                            (signed short)TwoBytesDis);
+                    sprintf(PC.Source, "%s", Registers->SegmentRegisters[Content.SR]);
+                }
+            }
+            else if(Content.MOD == 3)
+            {
+                if(Content.OpCode == 0x8e)
+                {
+                    RegistersValues->SegmentRegistersValue[Content.SR] =
+                        RegistersValues->RegistersValue[Content.R_M];
+
+                    sprintf(PC.Dest, "%s", Registers->SegmentRegisters[Content.SR]);
+                    sprintf(PC.Source, "%s", Registers->MainRegisters[Content.R_M]);
+                }
+                else
+                {
+                    RegistersValues->RegistersValue[Content.R_M] =
+                        RegistersValues->SegmentRegistersValue[Content.SR];
+
+                    sprintf(PC.Dest, "%s", Registers->MainRegisters[Content.R_M]);
+                    sprintf(PC.Source, "%s", Registers->SegmentRegisters[Content.SR]);
+                }
             }
 
-            uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
-            printf("mov %s, [%d]\n", SegmentRegisters[SegRegIndex], (signed short)TwoBytesDis);
-        }
-        else
+            PrintInstruction(PC);
+            
+        } break;
+
+        case 0x88:
+        case 0x00:
+        case 0x38:
+        case 0x28:
         {
-            printf("mov %s, %s]\n", (char *)SegmentRegisters[SegRegIndex], (char *)Register_Memory[R_M]);
-        }
-    }
-
-    else if(MOD == 1)
-    {
-        if (fread(buf, sizeof(buf), 1, fp) != 1) {
-            printf("Failed to read data from file\n");
-            fclose(fp);
-        }
-
-        uint8 OneByteDis = (uint8)buf[0]; 
-        if(OneByteDis)
-        {
-            printf("mov %s, %s %+d]\n", (char *)SegmentRegisters[SegRegIndex], (char *)Register_Memory[R_M],
-                   (signed char)OneByteDis);
-        }
-        else
-        {
-            printf("mov %s, %s]\n", (char *)SegmentRegisters[SegRegIndex], (char *)Register_Memory[R_M]);
-        }
-    }
-
-    else if(MOD == 2)
-    {
-        if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
-            printf("Failed to read data from file\n");
-            fclose(fp);
-        }
-
-        uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
-        printf("mov %s, %s %+d]\n", (char *)SegmentRegisters[SegRegIndex], (char *)Register_Memory[R_M],
-               (signed short)TwoBytesDis);
-    }
-    
-    else if(MOD == 3)
-    {
-
-        uint16 RegIndex = R_M | 8;
-        SegmentRegistersValue[SegRegIndex] = RegistersValue[RegIndex - 8];
-        printf("mov %s, %s\n", SegmentRegisters[SegRegIndex], Registers[RegIndex]);
-    }
-}
-
-void
-SegmentRegisterToRegisterMemory(uint16 Instruction, FILE* fp, char *Register_Memory[], char *SegmentRegisters[],
-                                char *Registers[], uint16 *RegistersValue, uint16 *SegmentRegistersValue)
-{
-    uint16 R_M = Instruction & 0x0007;
-
-    uint16 ModMask = 0x00c0;
-    uint16 MOD = (Instruction & ModMask) >> 6;
-
-    uint16 SegRegIndex = (Instruction & 0x0018) >> 3;
-    
-    unsigned char buffer[2];
-    unsigned char buf[1];
-
-    if(MOD == 0)
-    {
-        if(R_M == 6)
-        {
-            if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
-                printf("Failed to read data from file\n");
-                fclose(fp);
-      
+            if(Content.OpCode == 0x00)
+            {
+                PC.Operation = "add";
+            }
+            else if(Content.OpCode == 0x28)
+            {
+                PC.Operation = "sub";
+            }
+            else if(Content.OpCode == 0x38)
+            {
+                PC.Operation = "cmp";
+            }
+            else
+            {
+                PC.Operation = "mov";
             }
 
-            uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
-            printf("mov [%d], %s\n", (signed short)TwoBytesDis, SegmentRegisters[SegRegIndex]);
-        }
-        else
+            if(Content.DirectAddress)
+            {
+                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                if(Content.DBit)
+                {
+                    sprintf(PC.Dest, "%s", Content.Reg);
+                    sprintf(PC.Source, "[%d]", (signed short)TwoBytesDis);
+                }
+                else
+                {
+                    sprintf(PC.Dest, "[%d]", (signed short)TwoBytesDis);
+                    sprintf(PC.Source, "%s", Content.Reg);
+                }
+            }
+            else if(Content.MOD == 0)
+            {
+                if(Content.DBit)
+                {
+                    sprintf(PC.Dest, "%s", Content.Reg);
+                    sprintf(PC.Source, "%s]", Registers->Register_Memory[Content.R_M]);
+                }
+                else
+                {
+                    sprintf(PC.Dest, "%s]", Registers->Register_Memory[Content.R_M]);
+                    sprintf(PC.Source, "%s", Content.Reg);
+                }
+            }
+            else if(Content.MOD == 1)
+            {
+                uint8 OneByteDis = Content.DispLow; 
+                if(Content.DBit)
+                {
+                    sprintf(PC.Dest, "%s", Content.Reg);
+                    sprintf(PC.Source, "%s %+d]", Registers->Register_Memory[Content.R_M],
+                            (signed char)OneByteDis);
+                }
+                else
+                {
+                    sprintf(PC.Dest, "%s %+d]", Registers->Register_Memory[Content.R_M],
+                            (signed char)OneByteDis);
+                    sprintf(PC.Source, "%s", Content.Reg);
+                }
+            }
+            else if(Content.MOD == 2)
+            {
+                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                if(Content.DBit)
+                {
+                    sprintf(PC.Dest, "%s", Content.Reg);
+                    sprintf(PC.Source, "%s %+d]", Registers->Register_Memory[Content.R_M],
+                            (signed short)TwoBytesDis);
+                }
+                else
+                {
+                    sprintf(PC.Dest, "%s %+d]", Registers->Register_Memory[Content.R_M],
+                            (signed short)TwoBytesDis);
+                    sprintf(PC.Source, "%s", Content.Reg);
+                }
+            }
+            else if(Content.MOD == 3)
+            {
+                if(Content.DBit)
+                {
+                    ComputeInstruction(Content.OpCode, Content.REG, Content.R_M, RegistersValues, 0,
+                                       Content.WBit);
+                    sprintf(PC.Dest, "%s", Content.Reg);
+                    sprintf(PC.Source, "%s", Content.RegMem);
+                }
+
+                else
+                {
+                    ComputeInstruction(Content.OpCode, Content.R_M, Content.REG, RegistersValues, 0,
+                                       Content.WBit);
+                    sprintf(PC.Dest, "%s", Content.RegMem);
+                    sprintf(PC.Source, "%s", Content.Reg);
+                }
+            }
+
+            PrintInstruction(PC);
+        } break;
+
+        case 0xb0:
         {
-            printf("mov %s], %s\n", (char *)Register_Memory[R_M], (char *)SegmentRegisters[SegRegIndex]);
-        }
-    }
+            uint16 Data;
+            if(Content.WBit)
+            {
+                if(Content.DataW != 0)
+                {
+                    Data = (Content.DataW << 8) | Content.Data;
+                }
+                else
+                {
+                    Data = Content.Data;
+                }
+                RegistersValues->RegistersValue[Content.REG] = Data;
+        
+                printf("mov %s, %u\n", Content.Reg, Data);
+            }
+            else
+            {
+                Data = Content.Data;
+                if(Content.REG < 4)
+                {
+                    RegistersValues->RegistersValue[Content.REG] =
+                        (RegistersValues->RegistersValue[Content.REG] & 0xff00) | Data; 
+                }
+                else
+                {
+                    RegistersValues->RegistersValue[Content.REG - 4] =
+                        (RegistersValues->RegistersValue[Content.REG - 4] & 0x00ff) | (Data << 8); 
+                }
+                printf("mov %s, %u\n", Content.Reg, Data);
 
-    else if(MOD == 1)
-    {
-        if (fread(buf, sizeof(buf), 1, fp) != 1) {
-            printf("Failed to read data from file\n");
-            fclose(fp);
-        }
+            }
+        } break;
 
-        uint8 OneByteDis = (uint8)buf[0]; 
-        if(OneByteDis)
+        case 0xa0:
         {
-            printf("mov %s %+d], %s\n", (char *)Register_Memory[R_M], (signed char)OneByteDis,
-                   (char *)SegmentRegisters[SegRegIndex]);
-        }
-        else
+            uint16 TwoBytesDis = ((uint16)Content.DispHigh << 8) | (Content.DispLow); 
+            printf("mov ax, [%d]\n", (signed short)TwoBytesDis);
+
+        } break;
+
+        case 0xa2:
         {
-            printf("mov %s], %s\n", (char *)Register_Memory[R_M], (char *)SegmentRegisters[SegRegIndex]);
-        }
-    }
+            uint16 TwoBytesDis = ((uint16)Content.DispHigh << 8) | (Content.DispLow); 
+            printf("mov [%d], ax\n", (signed short)TwoBytesDis);
 
-    else if(MOD == 2)
-    {
-        if(fread(buffer, sizeof(buffer), 1, fp) != 1) {
-            printf("Failed to read data from file\n");
-            fclose(fp);
-        }
+        } break;
 
-        uint16 TwoBytesDis = (((uint16)buffer[1] << 8)  | buffer[0]); 
-        printf("mov %s %+d], %s\n", (char *)Register_Memory[R_M], (signed short)TwoBytesDis,
-               (char *)SegmentRegisters[SegRegIndex]);
-    }
-    
-    else if(MOD == 3)
-    {
+        case 0x04:
+        case 0x3c:
+        case 0x2c:
+        {
+            if(Content.OpCode == 0x04)
+            {
+                PC.Operation = "add";
+            }
+            else if(Content.OpCode == 0x3c)
+            {
+                PC.Operation = "cmp";
+            }
+            else
+            {
+                PC.Operation = "sub";
+            }
 
-        uint16 RegIndex = R_M | 8;
-        RegistersValue[RegIndex - 8] = SegmentRegistersValue[SegRegIndex];
-        printf("mov %s, %s\n", Registers[RegIndex], SegmentRegisters[SegRegIndex]);
-    }
+            uint16 Data;
+            if(Content.WBit)
+            {
+                Data = ((uint16)Content.DataW << 8) | (Content.Data); 
+                sprintf(PC.Dest, "ax");
+                sprintf(PC.Source, "%d", Data);
+            }
+            else
+            {
+                Data = Content.Data;
+                sprintf(PC.Dest, "al");
+                sprintf(PC.Source, "%d", Data);
+            }
+
+            ComputeInstruction(Content.OpCode, 0, 0, RegistersValues, Data, Content.WBit);
+            PrintInstruction(PC);
+
+        } break;
+
+        case 0xc6:
+        {
+            if(Content.DirectAddress)
+            {
+                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                if(Content.WBit)
+                {
+                    uint16 Data = (((uint16)Content.DataW << 8)  | Content.Data); 
+                    printf("mov [%d], word [%d]\n", (signed short)TwoBytesDis, (signed short)Data);
+                }
+                else
+                {
+                    uint8 Data = Content.Data;
+                    printf("mov [%d], byte [%d]\n", (signed short)TwoBytesDis, (signed char)Data);
+                }
+            }
+
+            else if(Content.MOD == 0)
+            {
+                if(Content.WBit)
+                {
+                    uint16 Data = (((uint16)Content.DataW << 8)  | Content.Data); 
+                    printf("mov %s], word [%d]\n", Registers->Register_Memory[Content.R_M],
+                           (signed short)Data);
+                }
+                else
+                {
+                    uint8 Data = Content.Data;
+                    printf("mov %s], byte %d\n", Registers->Register_Memory[Content.R_M],
+                           (signed char)Data);
+                }
+            }
+
+            else if(Content.MOD == 1)
+            {
+                uint8 OneByteDis = Content.DispLow; 
+                if(Content.WBit)
+                {
+                    uint16 Data = (((uint16)Content.DataW << 8)  | Content.Data); 
+                    printf("mov %s %+d], word %d\n", Registers->Register_Memory[Content.R_M],
+                           (signed char)OneByteDis, (signed short)Data);
+                }
+                else
+                {
+                    uint8 Data = Content.Data;
+                    printf("mov %s %+d], byte %d\n", Registers->Register_Memory[Content.R_M],
+                           (signed char)OneByteDis, (signed char)Data);
+                }
+            }
+
+            else if(Content.MOD == 2)
+            {
+                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                if(Content.WBit)
+                {
+                    uint16 Data = (((uint16)Content.DataW << 8)  | Content.Data); 
+                    printf("mov %s %+d], word %d\n", Registers->Register_Memory[Content.R_M],
+                           (signed short)TwoBytesDis, (signed short)Data);
+                }
+                else
+                {
+                    uint8 Data = Content.Data;
+                    printf("mov %s %+d], byte %d\n", Registers->Register_Memory[Content.R_M],
+                           (signed short)TwoBytesDis, (signed char)Data);
+                }
+            }
+
+        } break;
+
+        case 0x80:
+        {
+            uint16 OpCode;
+            if(Content.REG == 0)
+            {
+                PC.Operation = "add";
+            }
+            else if(Content.REG == 5)
+            {
+                PC.Operation = "sub";
+            }
+            else if(Content.REG == 7)
+            {
+                PC.Operation = "cmp";
+            }
+            OpCode = (Content.OpCode << 8) | (Content.REG << 3);
+
+            uint16 Data;
+            if(Content.WBit && !Content.SBit)
+            {
+                Data = (((uint16)Content.DataWS << 8)  | Content.Data);
+            }
+            else
+            {
+                Data = Content.Data;
+            }
+            sprintf(PC.Source, "%d", Data);
+            
+            if(Content.DirectAddress)
+            {
+                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                sprintf(PC.Dest, "word [%d]", TwoBytesDis);
+            }
+            else if(Content.MOD == 0)
+            {
+                sprintf(PC.Dest, "byte %s]", Registers->Register_Memory[Content.R_M]);
+            }
+            else if(Content.MOD == 1)
+            {
+                uint8 OneByteDis = Content.DispLow; 
+                sprintf(PC.Dest, "byte %s %+d]", Registers->Register_Memory[Content.R_M],
+                        (signed char)OneByteDis);
+            }
+            else if(Content.MOD == 2)
+            {
+                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                sprintf(PC.Dest, "word %s %+d]", Registers->Register_Memory[Content.R_M],
+                        (signed short)TwoBytesDis);
+            }
+            else if(Content.MOD == 3)
+            {
+                ComputeInstruction(OpCode, Content.R_M, 0, RegistersValues, Data, Content.WBit);
+                sprintf(PC.Dest, "%s", Registers->MainRegisters[Content.R_M]);
+            }
+
+            PrintInstruction(PC);
+            
+        } break;
+
+        default:
+        {
+            JumpAndLoop(Content, Registers, RegistersValues);
+
+        } break;
+    };
 }

@@ -13,14 +13,18 @@
 typedef uint8_t uint8;
 typedef uint16_t uint16;
 
+#include "decider.h"
+
 #include "accumulator.cpp"
 #include "register_memory.cpp"
 #include "immediate_register_memory.cpp"
 #include "other_instructions.cpp"
 
-char *Registers[16] =
-{"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh",
- "ax", "cx", "dx", "bx", "sp", "bp", "si", "di"};
+char *MainRegisters[8] =
+{"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"};
+
+char *SubRegisters[8] =
+{"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh" };
 
 char *Register_Memory[8] =
 {"[bx + si", "[bx + di", "[bp + si", "[bp + di",
@@ -36,198 +40,470 @@ char *SegmentRegisters[4] = {"es", "cs", "ss", "ds"};
 
 uint16 RegistersValue[8] = {0, 0, 0, 0,  0, 0, 0, 0};
 
-
 uint16 SegmentRegistersValue[4] = {0, 0, 0, 0};
 
 uint16 Flags = 0;
 
-int main()
+uint16 IPRegister = 0;
+
+uint8 OpCodeMasks[4] = {0xff, 0xfe, 0xfc, 0xf0};
+
+uint8 InstructionsOpCode[34] =
 {
-    FILE* fp;
-    uint16 Instruction;
-    char filename[] = "D:\\Projects\\Decoder_8086\\data\\listing_46";
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
+    0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+    0xe0, 0xe1, 0xe2, 0xe3, 0x88, 0xb0, 0xa0, 0xa2,
+    0xc6, 0x28, 0x38, 0x00, 0x3c, 0x2c, 0x04, 0x80,
+    0x8e, 0x8c
+};
 
-
-    // Open the file in read binary mode
-    fp = fopen(filename, "rb");
-
-    int num_values = 8; // Number of 16-bit values to read
+int
+ReadBinaryFile(char *FileName, uint8 *Buffer)
+{
+    int Result = 0;
     
+    FILE* fp;
+    // Open the file in read binary mode
+    fp = fopen(FileName, "rb");
+
+
     // Check if the file was opened successfully
     if (fp == NULL) {
-        printf("Failed to open file %s\n", filename);
-        return 1;
+        printf("Failed to open file %s\n", FileName);
     }
+    // Read binary data from file in a loop
 
     // Allocate buffer to hold binary data
-    unsigned char buffer[2];
-    unsigned char buf[1];
-                
-    // Read binary data from file in a loop
-    for (int i = 0; i < num_values; i++)
+    Result = fread(Buffer, sizeof(uint8), 512, fp);
+    fclose(fp);
+
+    return(Result);
+}
+
+instruction_content
+FindInstructionContent(uint8 *Buffer, uint8 Instruction, values *Values)
+{
+
+    uint8 Byte_2 = Buffer[Values->IPRegister + 1];
+    uint8 Byte_3 = Buffer[Values->IPRegister + 2];
+    uint8 Byte_4 = Buffer[Values->IPRegister + 3];
+    uint8 Byte_5 = Buffer[Values->IPRegister + 4];
+    uint8 Byte_6 = Buffer[Values->IPRegister + 5];
+
+    instruction_content Result = {};
+
+    uint8 Operation = 0;
+    for(int MaskIndex = 0;
+        MaskIndex < 4;
+        ++MaskIndex)
     {
+        for(int InsOpIndex = 0;
+            InsOpIndex < 34;
+            ++InsOpIndex)
+        {
+            if((Instruction & OpCodeMasks[MaskIndex]) == InstructionsOpCode[InsOpIndex])
+            {
+                Operation = Instruction & OpCodeMasks[MaskIndex];
+                break;
+            }
+        }
 
-        if (fread(buffer, sizeof(buffer), 1, fp) != 1) {
-            printf("Failed to read data from file\n");
-            fclose(fp);
-            return 1;
-        }
-        
-        // Convert binary data to uint16
-        Instruction = (((uint16)buffer[0] << 8) | buffer[1]);
-        
-        uint16 Operation;
-        if(((Instruction & 0xfc00) == 0x8800) || ((Instruction & 0xfc00) == 0x0000) ||
-           ((Instruction & 0xfc00) == 0x2800) || ((Instruction & 0xfc00) == 0x3800))
+        if(Operation)
         {
-            Operation = Instruction & 0xfc00;
+            break;
         }
-        else if(((Instruction & 0xfe00) == 0xa000) || ((Instruction & 0xfe00) == 0xa200) ||
-                ((Instruction & 0xfe00) == 0x0400) || ((Instruction & 0xfe00) == 0x2c00) ||
-                ((Instruction & 0xfe00) == 0x3c00))
-        {
-            Operation = Instruction & 0xfe00;
-        }
-        else if(((Instruction & 0xfc38) == 0x8000) || ((Instruction & 0xfc38) == 0x8028) ||
-                ((Instruction & 0xfc38) == 0x8038))
-        {
-            Operation = Instruction & 0xfc38;
-        }
-        else if(((Instruction & 0xf000) == 0xb000))
-        {
-            Operation = Instruction & 0xb000;
-        }
-        else if(((Instruction & 0xfe38) == 0xc600))
-        {
-            Operation = Instruction & 0xc600;
-        }
-        else
-        {
-            Operation = Instruction & 0xff00;
-        }
+    }
 /*
-        else if(((Instruction & 0Xff00) == 0x8e00) || ((Instruction & 0Xff00) == 0x8c00))
+  
+    mov bx, -4093
+    mov cx, 3841
+    sub bx, cx
+
+    mov sp, 998
+    mov bp, 999
+    cmp bp, sp
+
+    add bp, 1027
+    sub bp, 2026
+
+ */
+    
+    switch(Operation)
+    {
+        // NOTE(handy): Data
+        case 0x70: 
+        case 0x71: 
+        case 0x72: 
+        case 0x73: 
+        case 0x74: 
+        case 0x75: 
+        case 0x76: 
+        case 0x77: 
+        case 0x78: 
+        case 0x79: 
+        case 0x7a: 
+        case 0x7b: 
+        case 0x7c: 
+        case 0x7d: 
+        case 0x7e: 
+        case 0x7f: 
+        case 0xe0: 
+        case 0xe1: 
+        case 0xe2: 
+        case 0xe3:
         {
-            Operation = Instruction & 0xff00;
-        }
-*/
-        switch(Operation)
+            Result.OpCode = Operation;
+            Result.Data = Byte_2;
+            Values->IPRegister += 1;
+
+        } break;
+
+        // NOTE(handy): mod, SR, R/M, DISP-LO, DISP-HI
+        case 0x8e:
+        case 0x8c:
         {
-            case 0x7000:
-            case 0x7100:
-            case 0x7200:
-            case 0x7300:
-            case 0x7400:
-            case 0x7500:
-            case 0x7600:
-            case 0x7700:
-            case 0x7800:
-            case 0x7900:
-            case 0x7a00:
-            case 0x7b00:
-            case 0x7c00:
-            case 0x7d00:
-            case 0x7e00:
-            case 0x7f00:
-            case 0xe000:
-            case 0xe100:
-            case 0xe200:
-            case 0xe300:
+            Result.OpCode = Operation;
+            Result.MOD = (Byte_2 & 0xc0) >> 6;
+            Result.SR = (Byte_2 & 0x18) >> 3;
+            Result.R_M = Byte_2 & 0x07;
+            Result.Reg = SegmentRegisters[Result.SR];
+            Result.RegMem = Register_Memory[Result.R_M];
+            Values->IPRegister += 1;
+
+            if((Result.MOD == 0) && (Result.R_M == 6))
             {
-                JumpAndLoop(Instruction, Operation, fp, LoopInstructions,
-                            JumpInstructions);
-            } break;
+                Result.DispLow = Byte_3;
+                Result.DispHigh = Byte_4;
+                Values->IPRegister += 2;
+                Result.DirectAddress = 1;
+            }
+            else if(Result.MOD == 1)
+            {
+                Result.DispLow = Byte_3;
+                Values->IPRegister += 1;
+            }
+            else if(Result.MOD == 2)
+            {
+                Result.DispLow = Byte_3;
+                Result.DispHigh = Byte_4;
+                Values->IPRegister += 2;
+            }
+
+        } break;
+
+        // NOTE(handy): Dbit, WBit, mod|REG|R/M, DISP-LO, DISP-HI
+        case 0x88:
+        case 0x00:
+        case 0x28:
+        case 0x38:
+        {
+            Result.OpCode = Operation;
+            Result.DBit = (Instruction & 0x02) >> 1; 
+            Result.WBit = Instruction & 0x01; 
+            Result.MOD = (Byte_2 & 0xc0) >> 6;
+            Result.R_M = Byte_2 & 0x07;
+            Result.REG = (Byte_2 & 0x38) >> 3;
+
+    
+            if(Result.WBit)
+            {
+                Result.Reg = MainRegisters[Result.REG];
+            }
+            else
+            {
+                Result.Reg = SubRegisters[Result.REG];
+            }
+
+            if(!Result.WBit && (Result.MOD == 3))
+            {
+                Result.RegMem = SubRegisters[Result.R_M];
+            }
+            else if(Result.MOD == 3)
+            {
+                Result.RegMem = MainRegisters[Result.R_M];
+            }
             
-            case 0x8800:
-            {
-                RegisterMemoryToFromRegister(Instruction, fp, Registers,
-                                             Register_Memory, RegistersValue);
-            } break;
+            Values->IPRegister += 1;
 
-            case 0xb000:
+            if((Result.MOD == 0) && (Result.R_M == 6))
             {
-                ImmediateToRegister(Instruction, fp, Registers, RegistersValue);
-            } break;
-
-            case 0xa000:
+                Result.DispLow = Byte_3;
+                Result.DispHigh = Byte_4;
+                Values->IPRegister += 2;
+                Result.DirectAddress = 1;
+            }
+            else if(Result.MOD == 1)
             {
-                MemoryToAccumulator(Instruction, fp);
-            } break;
-
-            case 0xa200:
+                Result.DispLow = Byte_3;
+                Values->IPRegister += 1;
+            }
+            else if(Result.MOD == 2)
             {
-                AccumulatorToMemory(Instruction, fp);
-            } break;
-
-            case 0xc600:
-            {
-                ImmediateToRegisterMemory(Instruction, fp, Registers, Register_Memory);
-            } break;
-
-            case 0x0000:
-            {
-                AddSubCmpRegisterMemoryToFromRegister(Instruction, Operation, fp, Registers,
-                                                      Register_Memory, RegistersValue, &Flags);
-            } break;
-
-            case 0x0400:
-            {
-                AddSubCmpMemoryToAccumulator(Instruction, Operation, fp);
-            } break;
-
-            case 0x8000:
-            {
-                AddSubCmpImmediateToRegisterMemory(Instruction, Operation, fp,
-                                                   Registers, Register_Memory, RegistersValue, &Flags);            
-            } break;
-
-            case 0x2800:
-            {
-                AddSubCmpRegisterMemoryToFromRegister(Instruction, Operation, fp, Registers,
-                                                      Register_Memory, RegistersValue, &Flags);
-            } break;
-
-            case 0x2c00:
-            {
-                AddSubCmpMemoryToAccumulator(Instruction, Operation, fp);
-            } break;
-
-            case 0x8028:
-            {
-                AddSubCmpImmediateToRegisterMemory(Instruction, Operation, fp,
-                                                   Registers, Register_Memory, RegistersValue, &Flags);            
-            } break;
-
-            case 0x3800:
-            {
-                AddSubCmpRegisterMemoryToFromRegister(Instruction, Operation, fp, Registers,
-                                                      Register_Memory, RegistersValue, &Flags);
-            } break;
-
-            case 0x3c00:
-            {
-                AddSubCmpMemoryToAccumulator(Instruction, Operation, fp);
-            } break;
-
-            case 0x8038:
-            {
-                AddSubCmpImmediateToRegisterMemory(Instruction, Operation, fp,
-                                                   Registers, Register_Memory, RegistersValue, &Flags);            
-            } break;
-
-            case 0x8e00:
-            {
-                RegisterMemoryToSegmentRegister(Instruction, fp, Register_Memory, SegmentRegisters,
-                                                Registers, RegistersValue, SegmentRegistersValue);
-            } break;
-
-            case 0x8c00:
-            {
-                SegmentRegisterToRegisterMemory(Instruction, fp, Register_Memory, SegmentRegisters,
-                                                Registers, RegistersValue, SegmentRegistersValue);
-            } break;
+                Result.DispLow = Byte_3;
+                Result.DispHigh = Byte_4;
+                Values->IPRegister += 2;
+            }
             
-        }
+        } break;
+
+        // NOTE(handy): WBit, REG, Data, DataW
+        case 0xb0:
+        {
+            Result.OpCode = Operation;
+            Result.WBit = (Instruction & 0x08) >> 3;
+            Result.REG = Instruction & 0x07;
+            Result.Data = Byte_2;
+            Values->IPRegister += 1;
+
+            if(Result.WBit)
+            {
+                Result.Reg = MainRegisters[Result.REG];
+                Result.DataW = Byte_3;
+                Values->IPRegister += 1;
+            }
+            else
+            {
+                Result.Reg = SubRegisters[Result.REG];
+            }
+
+        } break;
+
+        // NOTE(handy): WBit, addr-lo, addr-hi
+        case 0xa0:
+        case 0xa2:
+        {
+            Result.OpCode = Operation;
+            Result.WBit = Instruction & 0x01;
+            Result.DispLow = Byte_2;
+            Result.DispHigh = Byte_3;
+            Values->IPRegister += 2;
+
+        } break;
+
+        // NOTE(handy): WBit, Data, DataW
+        case 0x3c:
+        case 0x2c:
+        case 0x04:
+        {
+            Result.OpCode = Operation;
+            Result.WBit = Instruction & 0x01;
+            Result.Data = Byte_2;
+            Values->IPRegister += 1;
+
+            if(Result.WBit)
+            {
+                Result.DataW = Byte_3;
+                Values->IPRegister += 1;
+            }
+
+        } break;
+
+        // NOTE(handy):
+        // WBit, MOD, R/M, DISP-LO, DISP-HI, Data, DataW
+        // if 0x80 SBit, WBit, MOD, R/M, DISP-LO, DISP-HI, Data, DataSW 
+        case 0xc6:
+        case 0x80:
+        {
+            if(Operation == 0x80)
+            {
+                Result.OpCode = Operation;
+                Result.SBit = (Instruction & 0x02) >> 1;
+                Result.WBit = Instruction & 0x01;
+                Result.MOD = (Byte_2 & 0xc0) >> 6;
+                Result.REG = (Byte_2 & 0x38) >> 3;
+                Result.R_M = Byte_2 & 0x07;
+                Values->IPRegister += 1;
+                        
+                if(Result.WBit && !Result.SBit)
+                {
+                    if(Result.MOD == 0)
+                    {
+                        if(Result.R_M == 6)
+                        {
+                            Result.DispLow = Byte_3;
+                            Result.DispHigh = Byte_4;
+                            Result.Data = Byte_5;
+                            Result.DataWS = Byte_6;
+                            Values->IPRegister += 4;
+                            Result.DirectAddress = 1;
+                        }
+                        else
+                        {
+                            Result.Data = Byte_3;
+                            Result.DataWS = Byte_4;
+                            Values->IPRegister += 2;
+                        }
+                    }
+                    else if(Result.MOD == 1)
+                    {
+                        Result.DispLow = Byte_3;
+                        Result.Data = Byte_4;
+                        Result.DataWS = Byte_5;
+                        Values->IPRegister += 3;
+                        
+                    }
+                    else if(Result.MOD == 2)
+                    {
+                        Result.DispLow = Byte_3;
+                        Result.DispHigh = Byte_4;
+                        Result.Data = Byte_5;
+                        Result.DataWS = Byte_6;
+                        Values->IPRegister += 4;
+                    }
+                    else if(Result.MOD == 3)
+                    {
+                        Result.Data = Byte_3;
+                        Result.DataWS = Byte_4;
+                        Values->IPRegister += 2;
+                    }
+                }
+                else
+                {
+                    if(Result.MOD == 0)
+                    {
+                        if(Result.R_M == 6)
+                        {
+                            Result.DispLow = Byte_3;
+                            Result.DispHigh = Byte_4;
+                            Result.Data = Byte_5;
+                            Values->IPRegister += 3;
+                            Result.DirectAddress = 1;
+                        }
+                        else
+                        {
+                            Result.Data = Byte_3;
+                            Values->IPRegister += 1;
+                        }
+                    }
+                    else if(Result.MOD == 1)
+                    {
+                        Result.DispLow = Byte_3;
+                        Result.Data = Byte_4;
+                        Values->IPRegister += 2;
+                        
+                    }
+                    else if(Result.MOD == 2)
+                    {
+                        Result.DispLow = Byte_3;
+                        Result.DispHigh = Byte_4;
+                        Result.Data = Byte_5;
+                        Values->IPRegister += 3;
+                    }
+                    else if(Result.MOD == 3)
+                    {
+                        Result.Data = Byte_3;
+                        Values->IPRegister += 1;
+                    }
+                }
+            }
+            else
+            {
+                Result.OpCode = Operation;
+                Result.WBit = Instruction & 0x01;
+                Result.MOD = (Byte_2 & 0xc0) >> 6;
+                Result.R_M = Byte_2 & 0x07;
+                Values->IPRegister += 1;
+
+                if(Result.WBit)
+                {
+                    if(Result.MOD == 0)
+                    {
+                        if(Result.R_M == 6)
+                        {
+                            Result.DispLow = Byte_3;
+                            Result.DispHigh = Byte_4;
+                            Result.Data = Byte_5;
+                            Result.DataW = Byte_6;
+                            Values->IPRegister += 4;
+                            Result.DirectAddress = 1;
+                        }
+                        else
+                        {
+                            Result.Data = Byte_3;
+                            Result.DataW = Byte_4;
+                            Values->IPRegister += 2;
+                        }
+                    }
+                    else if(Result.MOD == 1)
+                    {
+                        Result.DispLow = Byte_3;
+                        Result.Data = Byte_4;
+                        Result.DataW = Byte_5;
+                        Values->IPRegister += 3;
+                    }
+                    else if(Result.MOD == 2)
+                    {
+                        Result.DispLow = Byte_3;
+                        Result.DispHigh = Byte_4;
+                        Result.Data = Byte_5;
+                        Result.DataW = Byte_6;
+                        Values->IPRegister += 4;
+                    }
+                }
+                else
+                {
+                    if(Result.MOD == 0)
+                    {
+                        if(Result.R_M == 6)
+                        {
+                            Result.DispLow = Byte_3;
+                            Result.DispHigh = Byte_4;
+                            Result.Data = Byte_5;
+                            Values->IPRegister += 3;
+                            Result.DirectAddress = 1;
+                        }
+                        else
+                        {
+                            Result.Data = Byte_3;
+                            Values->IPRegister += 1;
+                        }
+                    }
+                    else if(Result.MOD == 1)
+                    {
+                        Result.DispLow = Byte_3;
+                        Result.Data = Byte_4;
+                        Values->IPRegister += 2;
+                    }
+                    else if(Result.MOD == 2)
+                    {
+                        Result.DispLow = Byte_3;
+                        Result.DispHigh = Byte_4;
+                        Result.Data = Byte_5;
+                        Values->IPRegister += 3;
+                    }
+                }
+            }
+            
+        } break;
+        
+    };
+
+    return(Result);
+}
+
+int main()
+{
+    char FileName[] = "D:\\Projects\\Decoder_8086\\data\\listing_49";
+    uint8 GlobalBuffer[512] = {};
+    int End = ReadBinaryFile(FileName, GlobalBuffer);
+    
+    registers Registers = {};
+    Registers.MainRegisters = MainRegisters;
+    Registers.Register_Memory = Register_Memory;
+    Registers.JumpInstructions = JumpInstructions;
+    Registers.LoopInstructions = LoopInstructions;
+    Registers.SegmentRegisters = SegmentRegisters;
+    Registers.SubRegisters = SubRegisters;
+    
+    values RegistersValues = {};
+    
+    while(RegistersValues.IPRegister != End)
+    {
+        uint8 Instruction = GlobalBuffer[RegistersValues.IPRegister];
+        instruction_content IC = FindInstructionContent(GlobalBuffer, Instruction, &RegistersValues);
+        RegistersValues.IPRegister++;
+
+        DetermineOperation(IC, &Registers, &RegistersValues);
     }
 
     printf("Finaly registers:\n");
@@ -239,8 +515,8 @@ int main()
         {
             printf("\n");
         }
-        printf("    %s: 0x%x (%u)\n", Registers[RegIndex + 8], (uint16)RegistersValue[RegIndex],
-               RegistersValue[RegIndex]);
+        printf("    %s: 0x%x (%u)\n", MainRegisters[RegIndex], RegistersValues.RegistersValue[RegIndex],
+               RegistersValues.RegistersValue[RegIndex]);
     }
 
     for(int SegRegIndex = 0;
@@ -248,12 +524,11 @@ int main()
         ++SegRegIndex)
     {
         printf("    %s: 0x%x (%u)\n", SegmentRegisters[SegRegIndex],
-               (uint16)SegmentRegistersValue[SegRegIndex], SegmentRegistersValue[SegRegIndex]);
+               RegistersValues.SegmentRegistersValue[SegRegIndex],
+               RegistersValues.SegmentRegistersValue[SegRegIndex]);
     }
 
-    printf("Flags: %x", Flags);
-    
-    fclose(fp);
-    
+    printf("Flags: %x\n", RegistersValues.Flags);
+    printf("IP: %u", RegistersValues.IPRegister);
     return(0);
 }
