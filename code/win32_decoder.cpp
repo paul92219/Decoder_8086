@@ -14,11 +14,7 @@ typedef uint8_t uint8;
 typedef uint16_t uint16;
 
 #include "decider.h"
-
-#include "accumulator.cpp"
 #include "register_memory.cpp"
-#include "immediate_register_memory.cpp"
-#include "other_instructions.cpp"
 
 char *MainRegisters[8] =
 {"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"};
@@ -37,14 +33,6 @@ char *JumpInstructions[16] =
 char *LoopInstructions[4] = {"loopnz", "loopz", "loop", "jcxz"};
 
 char *SegmentRegisters[4] = {"es", "cs", "ss", "ds"};
-
-uint16 RegistersValue[8] = {0, 0, 0, 0,  0, 0, 0, 0};
-
-uint16 SegmentRegistersValue[4] = {0, 0, 0, 0};
-
-uint16 Flags = 0;
-
-uint16 IPRegister = 0;
 
 uint8 OpCodeMasks[4] = {0xff, 0xfe, 0xfc, 0xf0};
 
@@ -113,21 +101,7 @@ FindInstructionContent(uint8 *Buffer, uint8 Instruction, values *Values)
             break;
         }
     }
-/*
-  
-    mov bx, -4093
-    mov cx, 3841
-    sub bx, cx
 
-    mov sp, 998
-    mov bp, 999
-    cmp bp, sp
-
-    add bp, 1027
-    sub bp, 2026
-
- */
-    
     switch(Operation)
     {
         // NOTE(handy): Data
@@ -483,10 +457,10 @@ FindInstructionContent(uint8 *Buffer, uint8 Instruction, values *Values)
 
 int main()
 {
-    char FileName[] = "D:\\Projects\\Decoder_8086\\data\\listing_49";
+    char FileName[] = "D:\\Projects\\Decoder_8086\\data\\listing_53";
     uint8 GlobalBuffer[512] = {};
     int End = ReadBinaryFile(FileName, GlobalBuffer);
-    
+
     registers Registers = {};
     Registers.MainRegisters = MainRegisters;
     Registers.Register_Memory = Register_Memory;
@@ -505,7 +479,7 @@ int main()
 
         DetermineOperation(IC, &Registers, &RegistersValues);
     }
-
+#if 1
     printf("Finaly registers:\n");
     for(int RegIndex = 0;
         RegIndex < 8;
@@ -530,5 +504,6 @@ int main()
 
     printf("Flags: %x\n", RegistersValues.Flags);
     printf("IP: %u", RegistersValues.IPRegister);
+#endif
     return(0);
 }

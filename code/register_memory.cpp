@@ -249,6 +249,168 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
     };
 }
 
+struct load_memory
+{
+    uint8 R_MIndex;
+    uint8 REGIndex;
+    uint8 WordByte;
+    uint16 DispValue;
+    uint16 Data;
+};
+
+uint16
+ComputeMemoryIndex(values *Values, uint8 R_MIndex, uint16 DispValue)
+{
+    uint16 Result = DispValue;
+    switch(R_MIndex)
+    {
+        case 0:
+        {
+            Result += Values->RegistersValue[3] + Values->RegistersValue[6];
+        } break;
+
+        case 1:
+        {
+            Result += Values->RegistersValue[3] + Values->RegistersValue[7];
+        } break;
+
+        case 2:
+        {
+            Result += Values->RegistersValue[5] + Values->RegistersValue[6];
+        } break;
+
+        case 3:
+        {
+            Result += Values->RegistersValue[5] + Values->RegistersValue[7];
+        } break;
+
+        case 4:
+        {
+            Result += Values->RegistersValue[6];
+        } break;
+
+        case 5:
+        {
+            Result += Values->RegistersValue[7];
+        } break;
+
+        case 6:
+        {
+            Result += Values->RegistersValue[5];
+        } break;
+
+        case 7:
+        {
+            Result += Values->RegistersValue[3];
+        } break;
+    };
+
+    return(Result);
+}
+
+void
+ComputeImmediateMemoryOperations(load_memory LM, values *Values)
+{
+    uint16 MemIndex = ComputeMemoryIndex(Values, LM.R_MIndex, LM.DispValue);
+    
+    if(LM.WordByte)
+    {
+        Values->Memory[MemIndex] = (uint8)(LM.Data & 0x00ff);
+        Values->Memory[MemIndex + 1] = (uint8)(LM.Data & 0xff00);
+    }
+    else
+    {
+        Values->Memory[MemIndex] = (uint8)(LM.Data & 0x00ff);
+    }
+}
+
+void
+WriteIntoMemory(load_memory LM, values *Values, uint8 OpCode)
+{
+    uint16 MemIndex = ComputeMemoryIndex(Values, LM.R_MIndex, LM.DispValue);
+
+    uint16 Value = Values->RegistersValue[LM.REGIndex];
+    uint16 MemValue = (Values->Memory[MemIndex + 1] << 8) | Values->Memory[MemIndex];
+    
+    if(OpCode == 0x00)
+    {
+        MemValue += Value;
+        Values->Memory[MemIndex] = (uint8)(MemValue & 0x00ff);
+        Values->Memory[MemIndex + 1] = (uint8)(MemValue & 0xff00);
+    }
+    else if(OpCode == 0x28)
+    {
+        MemValue -= Value;
+        Values->Memory[MemIndex] = (uint8)(MemValue & 0x00ff);
+        Values->Memory[MemIndex + 1] = (uint8)(MemValue & 0xff00);
+    }
+    else if(OpCode == 0x88)
+    {
+        Values->Memory[MemIndex] = (uint8)(Value & 0x00ff);
+        Values->Memory[MemIndex + 1] = (uint8)(Value & 0xff00);
+    }
+}
+
+void
+LoadFromMemory(load_memory LM, values *Values, uint8 OpCode)
+{
+    uint16 MemIndex = ComputeMemoryIndex(Values, LM.R_MIndex, LM.DispValue);
+
+    
+    uint16 Value = Values->RegistersValue[LM.REGIndex];
+    uint16 MemValue = (Values->Memory[MemIndex + 1] << 8) | Values->Memory[MemIndex];
+    if(OpCode == 0x00)
+    {
+        Value += MemValue;
+        if(Value == 0)
+        {
+            Values->Flags |= 0x0040;
+        }
+        else
+        {
+            Values->Flags &= 0x0080;
+        }
+                
+        if(Value & 0x8000)
+        {
+            Values->Flags |= 0x0080; 
+        }
+        else
+        {
+            Values->Flags &= 0x0040;
+        }
+    }
+    else if(OpCode == 0x28)
+    {
+        Value -= MemValue;
+        if(Value == 0)
+        {
+            Values->Flags |= 0x0040;
+        }
+        else
+        {
+            Values->Flags &= 0x0080;
+        }
+                
+        if(Value & 0x8000)
+        {
+            Values->Flags |= 0x0080; 
+        }
+        else
+        {
+            Values->Flags &= 0x0040;
+        }
+    }
+    else if(OpCode == 0x88)
+    {
+        Value = (Value & 0xff00) | Values->Memory[MemIndex];
+
+        Value = (Value & 0x00ff) | (Values->Memory[MemIndex + 1] << 8);
+    }
+
+    Values->RegistersValue[LM.REGIndex] = Value;
+}
+
 void
 DetermineOperation(instruction_content Content, registers *Registers, values *RegistersValues)
 {
@@ -348,6 +510,10 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
         case 0x38:
         case 0x28:
         {
+            load_memory LMemory = {};
+            LMemory.REGIndex = Content.REG;
+            LMemory.R_MIndex = Content.R_M;
+
             if(Content.OpCode == 0x00)
             {
                 PC.Operation = "add";
@@ -370,11 +536,13 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
                 uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
                 if(Content.DBit)
                 {
+                    RegistersValues->RegistersValue[Content.REG] = RegistersValues->Memory[TwoBytesDis];
                     sprintf(PC.Dest, "%s", Content.Reg);
                     sprintf(PC.Source, "[%d]", (signed short)TwoBytesDis);
                 }
                 else
                 {
+                    RegistersValues->Memory[TwoBytesDis] = RegistersValues->RegistersValue[Content.REG];
                     sprintf(PC.Dest, "[%d]", (signed short)TwoBytesDis);
                     sprintf(PC.Source, "%s", Content.Reg);
                 }
@@ -383,44 +551,56 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
             {
                 if(Content.DBit)
                 {
+                    LoadFromMemory(LMemory, RegistersValues, Content.OpCode);
+
                     sprintf(PC.Dest, "%s", Content.Reg);
                     sprintf(PC.Source, "%s]", Registers->Register_Memory[Content.R_M]);
                 }
                 else
                 {
+                    WriteIntoMemory(LMemory, RegistersValues, Content.OpCode);
+
                     sprintf(PC.Dest, "%s]", Registers->Register_Memory[Content.R_M]);
                     sprintf(PC.Source, "%s", Content.Reg);
                 }
             }
             else if(Content.MOD == 1)
             {
-                uint8 OneByteDis = Content.DispLow; 
+                LMemory.DispValue = Content.DispLow; 
                 if(Content.DBit)
                 {
+                    LoadFromMemory(LMemory, RegistersValues, Content.OpCode);
+
                     sprintf(PC.Dest, "%s", Content.Reg);
                     sprintf(PC.Source, "%s %+d]", Registers->Register_Memory[Content.R_M],
-                            (signed char)OneByteDis);
+                            (signed char)LMemory.DispValue);
                 }
                 else
                 {
+                    WriteIntoMemory(LMemory, RegistersValues, Content.OpCode);
+
                     sprintf(PC.Dest, "%s %+d]", Registers->Register_Memory[Content.R_M],
-                            (signed char)OneByteDis);
+                            (signed char)LMemory.DispValue);
                     sprintf(PC.Source, "%s", Content.Reg);
                 }
             }
             else if(Content.MOD == 2)
             {
-                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                LMemory.DispValue = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
                 if(Content.DBit)
                 {
+                    LoadFromMemory(LMemory, RegistersValues, Content.OpCode);
+
                     sprintf(PC.Dest, "%s", Content.Reg);
                     sprintf(PC.Source, "%s %+d]", Registers->Register_Memory[Content.R_M],
-                            (signed short)TwoBytesDis);
+                            (signed short)LMemory.DispValue);
                 }
                 else
                 {
+                    WriteIntoMemory(LMemory, RegistersValues, Content.OpCode);
+
                     sprintf(PC.Dest, "%s %+d]", Registers->Register_Memory[Content.R_M],
-                            (signed short)TwoBytesDis);
+                            (signed short)LMemory.DispValue);
                     sprintf(PC.Source, "%s", Content.Reg);
                 }
             }
@@ -533,70 +713,52 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
 
         case 0xc6:
         {
+            load_memory LMemory = {};
+            LMemory.R_MIndex = Content.R_M;
+
+            char *WordByte;
+            if(Content.WBit)
+            {
+                LMemory.Data = (((uint16)Content.DataW << 8)  | Content.Data); 
+                LMemory.WordByte = 1;
+                WordByte = "word";
+            }
+            else
+            {
+                LMemory.Data = Content.Data;
+                LMemory.WordByte = 0;
+                WordByte = "byte";
+            }
+            PC.Operation = "mov";
+            sprintf(PC.Source, "%d", (signed short)LMemory.Data);
+            
             if(Content.DirectAddress)
             {
-                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
-                if(Content.WBit)
-                {
-                    uint16 Data = (((uint16)Content.DataW << 8)  | Content.Data); 
-                    printf("mov [%d], word [%d]\n", (signed short)TwoBytesDis, (signed short)Data);
-                }
-                else
-                {
-                    uint8 Data = Content.Data;
-                    printf("mov [%d], byte [%d]\n", (signed short)TwoBytesDis, (signed char)Data);
-                }
+                LMemory.DispValue = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                sprintf(PC.Dest, "%s [%d]", WordByte, (signed short)LMemory.DispValue);
             }
 
             else if(Content.MOD == 0)
             {
-                if(Content.WBit)
-                {
-                    uint16 Data = (((uint16)Content.DataW << 8)  | Content.Data); 
-                    printf("mov %s], word [%d]\n", Registers->Register_Memory[Content.R_M],
-                           (signed short)Data);
-                }
-                else
-                {
-                    uint8 Data = Content.Data;
-                    printf("mov %s], byte %d\n", Registers->Register_Memory[Content.R_M],
-                           (signed char)Data);
-                }
+                sprintf(PC.Dest, "%s %s]", WordByte, Registers->Register_Memory[Content.R_M]);
             }
 
             else if(Content.MOD == 1)
             {
-                uint8 OneByteDis = Content.DispLow; 
-                if(Content.WBit)
-                {
-                    uint16 Data = (((uint16)Content.DataW << 8)  | Content.Data); 
-                    printf("mov %s %+d], word %d\n", Registers->Register_Memory[Content.R_M],
-                           (signed char)OneByteDis, (signed short)Data);
-                }
-                else
-                {
-                    uint8 Data = Content.Data;
-                    printf("mov %s %+d], byte %d\n", Registers->Register_Memory[Content.R_M],
-                           (signed char)OneByteDis, (signed char)Data);
-                }
+                LMemory.DispValue = Content.DispLow; 
+                sprintf(PC.Dest, "%s %s %+d]", WordByte, Registers->Register_Memory[Content.R_M],
+                        (signed char)LMemory.DispValue);
             }
 
             else if(Content.MOD == 2)
             {
-                uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
-                if(Content.WBit)
-                {
-                    uint16 Data = (((uint16)Content.DataW << 8)  | Content.Data); 
-                    printf("mov %s %+d], word %d\n", Registers->Register_Memory[Content.R_M],
-                           (signed short)TwoBytesDis, (signed short)Data);
-                }
-                else
-                {
-                    uint8 Data = Content.Data;
-                    printf("mov %s %+d], byte %d\n", Registers->Register_Memory[Content.R_M],
-                           (signed short)TwoBytesDis, (signed char)Data);
-                }
+                LMemory.DispValue = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
+                sprintf(PC.Dest, "%s %s %+d]", WordByte, Registers->Register_Memory[Content.R_M],
+                        (signed short)LMemory.DispValue);
             }
+
+            ComputeImmediateMemoryOperations(LMemory, RegistersValues);
+            PrintInstruction(PC);
 
         } break;
 
@@ -654,7 +816,7 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
                 ComputeInstruction(OpCode, Content.R_M, 0, RegistersValues, Data, Content.WBit);
                 sprintf(PC.Dest, "%s", Registers->MainRegisters[Content.R_M]);
             }
-
+            
             PrintInstruction(PC);
             
         } break;

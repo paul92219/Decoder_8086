@@ -44,6 +44,8 @@ struct values
     uint16 SegmentRegistersValue[4];
     uint16 Flags;
     uint16 IPRegister;
+
+    uint8 Memory[65536];
     
 };
 #define DECIDER_H
