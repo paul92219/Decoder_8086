@@ -7,6 +7,12 @@
    $Notice: (C) Copyright 2014 by Molly Rocket, Inc. All Rights Reserved. $
    ======================================================================== */
 
+typedef struct
+{
+    uint16 Length;
+    uint8 *Bytes;
+} FREByteArray;
+
 struct instruction_content
 {
     uint8 OpCode;

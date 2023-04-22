@@ -457,7 +457,7 @@ FindInstructionContent(uint8 *Buffer, uint8 Instruction, values *Values)
 
 int main()
 {
-    char FileName[] = "D:\\Projects\\Decoder_8086\\data\\listing_53";
+    char FileName[] = "D:\\Projects\\Decoder_8086\\data\\listing_54_draw_rectangel";
     uint8 GlobalBuffer[512] = {};
     int End = ReadBinaryFile(FileName, GlobalBuffer);
 
@@ -479,6 +479,17 @@ int main()
 
         DetermineOperation(IC, &Registers, &RegistersValues);
     }
+
+    FILE *FileToWrite;
+    
+    FileToWrite = fopen("D:\\Projects\\Decoder_8086\\data\\test.data", "wb+");
+    
+    if(FileToWrite != 0)
+    {
+        fwrite(RegistersValues.Memory, 1, 65536, FileToWrite);
+        fclose(FileToWrite);
+    }    
+    
 #if 1
     printf("Finaly registers:\n");
     for(int RegIndex = 0;

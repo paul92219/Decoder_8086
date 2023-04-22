@@ -189,7 +189,7 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
         case 0x8038:
         {
             uint16 Result = Values->RegistersValue[DestIndex] - Data;
-            if(Values->RegistersValue[DestIndex] == 0)
+            if(Result == 0)
             {
                 Values->Flags |= 0x0040;
             }
@@ -198,7 +198,7 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
                 Values->Flags &= 0x0080;
             }
                 
-            if(Values->RegistersValue[DestIndex] & 0x8000)
+            if(Result & 0x8000)
             {
                 Values->Flags |= 0x0080; 
             }
