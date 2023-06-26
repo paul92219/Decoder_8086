@@ -5,22 +5,63 @@
    $Creator: Casey Muratori $
    $Notice: (C) Copyright 2014 by Molly Rocket, Inc. All Rights Reserved. $
    ======================================================================== */
+#include "compute.h"
 
-struct print_content
-{
-    char Source[32];
-    char Dest[32];
-    char *Operation;
-};
 
 void
-PrintInstruction(print_content PC)
+PrintInstruction(print_content PC, uint32 LastClocks)
 {
-    printf("%s %s, %s\n", PC.Operation, PC.Dest, PC.Source);
+    printf("%s %s, %s ; LastClocks: %u,  +Clocks: %u, TotalClocks: %u\n",
+           PC.Operation, PC.Dest, PC.Source, LastClocks,
+           (PC.Clocks - LastClocks), PC.Clocks);
 }
 
 void
-JumpAndLoop(instruction_content Content, registers *Registers, values *Values)
+ComputeEACicles(instruction_content *IC, uint32 *TotalCicles)
+{
+    int RegIndex = 0;
+    if((IC->DBit && !IC->DirectAddress) || ((!IC->DBit && !IC->DirectAddress)))
+    {
+        RegIndex = IC->R_M;
+    }
+    else
+    {
+        RegIndex = -1;
+    }
+        
+    if((IC->DispLow) && ((RegIndex == 3) || (RegIndex == 0)))
+    {
+        *TotalCicles += 11;
+    }
+    else if((IC->DispLow) && ((RegIndex == 2) || (RegIndex == 1)))
+    {
+        *TotalCicles += 12;
+    }
+    else if(((RegIndex == 4) || (RegIndex == 5) ||
+             (RegIndex == 6) || (RegIndex == 7)) && (IC->DispLow)) 
+    {
+        *TotalCicles += 9;
+    }
+    else if(IC->DispLow)
+    {
+        *TotalCicles += 6;
+    }
+    else if((RegIndex == 3) || (RegIndex == 0))
+    {
+        *TotalCicles += 7;
+    }
+    else if((RegIndex == 2) || (RegIndex == 1))
+    {
+        *TotalCicles += 8;
+    }
+    else if((RegIndex == 4) || (RegIndex == 5) || (RegIndex == 6) || (RegIndex == 7))
+    {
+        *TotalCicles += 5;
+    }
+}
+
+void
+JumpAndLoop(instruction_content Content, registers *Registers, data *Values)
 {
     if(Content.OpCode > 0x7f)
     {
@@ -48,7 +89,7 @@ JumpAndLoop(instruction_content Content, registers *Registers, values *Values)
 }
 
 void
-ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Values, uint16 Data,
+ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, data *Values, uint16 Data,
                    uint8 WBit)
 {
     switch(OpCode)
@@ -59,45 +100,45 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
             {
                 if((DestIndex < 4) && (SourceIndex < 4))
                 {
-                    Values->RegistersValue[DestIndex] =
-                        ((Values->RegistersValue[DestIndex] & 0xff00) |
-                         (Values->RegistersValue[SourceIndex] & 0x00ff)); 
+                    Values->RegistersBuffer[DestIndex] =
+                        ((Values->RegistersBuffer[DestIndex] & 0xff00) |
+                         (Values->RegistersBuffer[SourceIndex] & 0x00ff)); 
                 }
                 else if((DestIndex >= 4) && (SourceIndex >= 4))
                 {
                     DestIndex -= 4;
                     SourceIndex -= 4;
-                    Values->RegistersValue[DestIndex] =
-                        ((Values->RegistersValue[DestIndex] & 0x00ff) |
-                         (Values->RegistersValue[SourceIndex] & 0xff00)); 
+                    Values->RegistersBuffer[DestIndex] =
+                        ((Values->RegistersBuffer[DestIndex] & 0x00ff) |
+                         (Values->RegistersBuffer[SourceIndex] & 0xff00)); 
                 }
                 else if((DestIndex < 4) && (SourceIndex >= 4))
                 {
                     SourceIndex -= 4;
-                    Values->RegistersValue[DestIndex] =
-                        ((Values->RegistersValue[DestIndex] & 0xff00) |
-                         ((Values->RegistersValue[SourceIndex] & 0xff00) >> 8)); 
+                    Values->RegistersBuffer[DestIndex] =
+                        ((Values->RegistersBuffer[DestIndex] & 0xff00) |
+                         ((Values->RegistersBuffer[SourceIndex] & 0xff00) >> 8)); 
                 }
                 else if((DestIndex >= 4) && (SourceIndex < 4))
                 {
                     DestIndex -= 4;
-                    Values->RegistersValue[DestIndex] =
-                        ((Values->RegistersValue[DestIndex] & 0x00ff) |
-                         ((Values->RegistersValue[SourceIndex] & 0x00ff) << 8)); 
+                    Values->RegistersBuffer[DestIndex] =
+                        ((Values->RegistersBuffer[DestIndex] & 0x00ff) |
+                         ((Values->RegistersBuffer[SourceIndex] & 0x00ff) << 8)); 
                 }
             }
             else
             {
-                Values->RegistersValue[DestIndex] =
-                    Values->RegistersValue[SourceIndex];
+                Values->RegistersBuffer[DestIndex] =
+                    Values->RegistersBuffer[SourceIndex];
             }
 
         } break;
 
         case 0x00:
         {
-            Values->RegistersValue[DestIndex] += Values->RegistersValue[SourceIndex];
-            if(Values->RegistersValue[DestIndex] == 0)
+            Values->RegistersBuffer[DestIndex] += Values->RegistersBuffer[SourceIndex];
+            if(Values->RegistersBuffer[DestIndex] == 0)
             {
                 Values->Flags |= 0x0040;
             }
@@ -106,7 +147,7 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
                 Values->Flags &= 0x0080;
             }
                 
-            if(Values->RegistersValue[DestIndex] & 0x8000)
+            if(Values->RegistersBuffer[DestIndex] & 0x8000)
             {
                 Values->Flags |= 0x0080; 
             }
@@ -119,7 +160,7 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
         
         case 0x38:
         {
-            uint16 Result = Values->RegistersValue[DestIndex] - Values->RegistersValue[SourceIndex];
+            uint16 Result = Values->RegistersBuffer[DestIndex] - Values->RegistersBuffer[SourceIndex];
             if(Result == 0)
             {
                 Values->Flags |= 0x0040;
@@ -142,8 +183,8 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
         
         case 0x28:
         {
-            Values->RegistersValue[DestIndex] -= Values->RegistersValue[SourceIndex];
-            if(Values->RegistersValue[DestIndex] == 0)
+            Values->RegistersBuffer[DestIndex] -= Values->RegistersBuffer[SourceIndex];
+            if(Values->RegistersBuffer[DestIndex] == 0)
             {
                 Values->Flags |= 0x0040;
             }
@@ -152,7 +193,7 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
                 Values->Flags &= 0x0080;
             }
                 
-            if(Values->RegistersValue[DestIndex] & 0x8000)
+            if(Values->RegistersBuffer[DestIndex] & 0x8000)
             {
                 Values->Flags |= 0x0080; 
             }
@@ -165,8 +206,8 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
 
         case 0x8000:
         {
-            Values->RegistersValue[DestIndex] += Data;
-            if(Values->RegistersValue[DestIndex] == 0)
+            Values->RegistersBuffer[DestIndex] += Data;
+            if(Values->RegistersBuffer[DestIndex] == 0)
             {
                 Values->Flags |= 0x0040;
             }
@@ -175,7 +216,7 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
                 Values->Flags &= 0x0080;
             }
                 
-            if(Values->RegistersValue[DestIndex] & 0x8000)
+            if(Values->RegistersBuffer[DestIndex] & 0x8000)
             {
                 Values->Flags |= 0x0080; 
             }
@@ -188,7 +229,7 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
 
         case 0x8038:
         {
-            uint16 Result = Values->RegistersValue[DestIndex] - Data;
+            uint16 Result = Values->RegistersBuffer[DestIndex] - Data;
             if(Result == 0)
             {
                 Values->Flags |= 0x0040;
@@ -211,8 +252,8 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
 
         case 0x8028:
         {
-            Values->RegistersValue[DestIndex] -= Data;
-            if(Values->RegistersValue[DestIndex] == 0)
+            Values->RegistersBuffer[DestIndex] -= Data;
+            if(Values->RegistersBuffer[DestIndex] == 0)
             {
                 Values->Flags |= 0x0040;
             }
@@ -221,7 +262,7 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
                 Values->Flags &= 0x0080;
             }
                 
-            if(Values->RegistersValue[DestIndex] & 0x8000)
+            if(Values->RegistersBuffer[DestIndex] & 0x8000)
             {
                 Values->Flags |= 0x0080; 
             }
@@ -237,71 +278,62 @@ ComputeInstruction(uint16 OpCode, uint8 DestIndex, uint8 SourceIndex, values *Va
         {
             if(WBit)
             {
-                Values->RegistersValue[0] += Data;
+                Values->RegistersBuffer[0] += Data;
             }
             else
             {
-                uint8 LowPart = (Values->RegistersValue[0] & 0x00ff) + Data;
-                Values->RegistersValue[0] = (Values->RegistersValue[0] & 0xff00) | LowPart; 
+                uint8 LowPart = (Values->RegistersBuffer[0] & 0x00ff) + Data;
+                Values->RegistersBuffer[0] = (Values->RegistersBuffer[0] & 0xff00) | LowPart; 
             }
             
         } break;
     };
 }
 
-struct load_memory
-{
-    uint8 R_MIndex;
-    uint8 REGIndex;
-    uint8 WordByte;
-    uint16 DispValue;
-    uint16 Data;
-};
-
 uint16
-ComputeMemoryIndex(values *Values, uint8 R_MIndex, uint16 DispValue)
+ComputeMemoryIndex(data *Values, uint8 R_MIndex, uint16 DispValue)
 {
     uint16 Result = DispValue;
     switch(R_MIndex)
     {
         case 0:
         {
-            Result += Values->RegistersValue[3] + Values->RegistersValue[6];
+            Result += Values->RegistersBuffer[3] + Values->RegistersBuffer[6];
         } break;
 
         case 1:
         {
-            Result += Values->RegistersValue[3] + Values->RegistersValue[7];
+            Result += Values->RegistersBuffer[3] + Values->RegistersBuffer[7];
         } break;
 
         case 2:
         {
-            Result += Values->RegistersValue[5] + Values->RegistersValue[6];
+            Result += Values->RegistersBuffer[5] + Values->RegistersBuffer[6];
         } break;
 
         case 3:
         {
-            Result += Values->RegistersValue[5] + Values->RegistersValue[7];
+            Result += Values->RegistersBuffer[5] + Values->RegistersBuffer[7];
         } break;
 
         case 4:
         {
-            Result += Values->RegistersValue[6];
+            Result += Values->RegistersBuffer[6];
         } break;
 
         case 5:
         {
-            Result += Values->RegistersValue[7];
+            Result += Values->RegistersBuffer[7];
         } break;
 
         case 6:
         {
-            Result += Values->RegistersValue[5];
+            Result += Values->RegistersBuffer[5];
         } break;
 
         case 7:
         {
-            Result += Values->RegistersValue[3];
+            Result += Values->RegistersBuffer[3];
         } break;
     };
 
@@ -309,56 +341,56 @@ ComputeMemoryIndex(values *Values, uint8 R_MIndex, uint16 DispValue)
 }
 
 void
-ComputeImmediateMemoryOperations(load_memory LM, values *Values)
+ComputeImmediateMemoryOperations(load_memory LM, data *Values)
 {
     uint16 MemIndex = ComputeMemoryIndex(Values, LM.R_MIndex, LM.DispValue);
     
     if(LM.WordByte)
     {
-        Values->Memory[MemIndex] = (uint8)(LM.Data & 0x00ff);
-        Values->Memory[MemIndex + 1] = (uint8)(LM.Data & 0xff00);
+        Values->MemoryBuffer[MemIndex] = (uint8)(LM.Data & 0x00ff);
+        Values->MemoryBuffer[MemIndex + 1] = (uint8)(LM.Data & 0xff00);
     }
     else
     {
-        Values->Memory[MemIndex] = (uint8)(LM.Data & 0x00ff);
+        Values->MemoryBuffer[MemIndex] = (uint8)(LM.Data & 0x00ff);
     }
 }
 
 void
-WriteIntoMemory(load_memory LM, values *Values, uint8 OpCode)
+WriteIntoMemory(load_memory LM, data *Values, uint8 OpCode)
 {
     uint16 MemIndex = ComputeMemoryIndex(Values, LM.R_MIndex, LM.DispValue);
 
-    uint16 Value = Values->RegistersValue[LM.REGIndex];
-    uint16 MemValue = (Values->Memory[MemIndex + 1] << 8) | Values->Memory[MemIndex];
+    uint16 Value = Values->RegistersBuffer[LM.REGIndex];
+    uint16 MemValue = (Values->MemoryBuffer[MemIndex + 1] << 8) | Values->MemoryBuffer[MemIndex];
     
     if(OpCode == 0x00)
     {
         MemValue += Value;
-        Values->Memory[MemIndex] = (uint8)(MemValue & 0x00ff);
-        Values->Memory[MemIndex + 1] = (uint8)(MemValue & 0xff00);
+        Values->MemoryBuffer[MemIndex] = (uint8)(MemValue & 0x00ff);
+        Values->MemoryBuffer[MemIndex + 1] = (uint8)(MemValue & 0xff00);
     }
     else if(OpCode == 0x28)
     {
         MemValue -= Value;
-        Values->Memory[MemIndex] = (uint8)(MemValue & 0x00ff);
-        Values->Memory[MemIndex + 1] = (uint8)(MemValue & 0xff00);
+        Values->MemoryBuffer[MemIndex] = (uint8)(MemValue & 0x00ff);
+        Values->MemoryBuffer[MemIndex + 1] = (uint8)(MemValue & 0xff00);
     }
     else if(OpCode == 0x88)
     {
-        Values->Memory[MemIndex] = (uint8)(Value & 0x00ff);
-        Values->Memory[MemIndex + 1] = (uint8)(Value & 0xff00);
+        Values->MemoryBuffer[MemIndex] = (uint8)(Value & 0x00ff);
+        Values->MemoryBuffer[MemIndex + 1] = (uint8)(Value & 0xff00);
     }
 }
 
 void
-LoadFromMemory(load_memory LM, values *Values, uint8 OpCode)
+LoadFromMemory(load_memory LM, data *Values, uint8 OpCode)
 {
     uint16 MemIndex = ComputeMemoryIndex(Values, LM.R_MIndex, LM.DispValue);
 
     
-    uint16 Value = Values->RegistersValue[LM.REGIndex];
-    uint16 MemValue = (Values->Memory[MemIndex + 1] << 8) | Values->Memory[MemIndex];
+    uint16 Value = Values->RegistersBuffer[LM.REGIndex];
+    uint16 MemValue = (Values->MemoryBuffer[MemIndex + 1] << 8) | Values->MemoryBuffer[MemIndex];
     if(OpCode == 0x00)
     {
         Value += MemValue;
@@ -403,24 +435,44 @@ LoadFromMemory(load_memory LM, values *Values, uint8 OpCode)
     }
     else if(OpCode == 0x88)
     {
-        Value = (Value & 0xff00) | Values->Memory[MemIndex];
+        Value = (Value & 0xff00) | Values->MemoryBuffer[MemIndex];
 
-        Value = (Value & 0x00ff) | (Values->Memory[MemIndex + 1] << 8);
+        Value = (Value & 0x00ff) | (Values->MemoryBuffer[MemIndex + 1] << 8);
     }
 
-    Values->RegistersValue[LM.REGIndex] = Value;
+    Values->RegistersBuffer[LM.REGIndex] = Value;
 }
 
 void
-DetermineOperation(instruction_content Content, registers *Registers, values *RegistersValues)
+DetermineOperation(instruction_content Content, registers *Registers, data *RegistersBuffer,
+                   uint32 *TotalCicles)
 {
     print_content PC = {};
-    
+    uint32 LastCicles = *TotalCicles;
+
     switch(Content.OpCode)
     {
         case 0x8c:
         case 0x8e:
         {
+            if(Content.MOD != 3)
+            {
+                ComputeEACicles(&Content, TotalCicles);
+
+                if(Content.OpCode == 0x8e)
+                {
+                    *TotalCicles += 8;
+                }
+                else
+                {
+                    *TotalCicles += 9;
+                }
+            }
+            else
+            {
+                *TotalCicles += 2;
+            }
+            
             PC.Operation = "mov";
             if(Content.DirectAddress)
             {
@@ -485,23 +537,24 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
             {
                 if(Content.OpCode == 0x8e)
                 {
-                    RegistersValues->SegmentRegistersValue[Content.SR] =
-                        RegistersValues->RegistersValue[Content.R_M];
+                    RegistersBuffer->SegmentRegistersBuffer[Content.SR] =
+                        RegistersBuffer->RegistersBuffer[Content.R_M];
 
                     sprintf(PC.Dest, "%s", Registers->SegmentRegisters[Content.SR]);
                     sprintf(PC.Source, "%s", Registers->MainRegisters[Content.R_M]);
                 }
                 else
                 {
-                    RegistersValues->RegistersValue[Content.R_M] =
-                        RegistersValues->SegmentRegistersValue[Content.SR];
+                    RegistersBuffer->RegistersBuffer[Content.R_M] =
+                        RegistersBuffer->SegmentRegistersBuffer[Content.SR];
 
                     sprintf(PC.Dest, "%s", Registers->MainRegisters[Content.R_M]);
                     sprintf(PC.Source, "%s", Registers->SegmentRegisters[Content.SR]);
                 }
             }
 
-            PrintInstruction(PC);
+            PC.Clocks = *TotalCicles;
+            PrintInstruction(PC, LastCicles);
             
         } break;
 
@@ -531,18 +584,58 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
                 PC.Operation = "mov";
             }
 
+
+            if(Content.MOD != 3)
+            {
+                ComputeEACicles(&Content, TotalCicles);
+
+                if(Content.DBit)
+                {
+                    if(Content.OpCode == 0x88)
+                    {
+                        *TotalCicles += 8;
+                    }
+                    else
+                    {
+                        *TotalCicles += 9;
+                    }
+                }
+                else
+                {
+                    if((Content.OpCode == 0x88) || (Content.OpCode == 0x38))
+                    {
+                        *TotalCicles += 9;
+                    }
+                    else
+                    {
+                        *TotalCicles += 16;
+                    }
+                }
+            }
+            else
+            {
+                if(Content.OpCode == 0x88)
+                {
+                    *TotalCicles += 2;
+                }
+                else
+                {
+                    *TotalCicles += 3;
+                }
+            }
+            
             if(Content.DirectAddress)
             {
                 uint16 TwoBytesDis = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
                 if(Content.DBit)
                 {
-                    RegistersValues->RegistersValue[Content.REG] = RegistersValues->Memory[TwoBytesDis];
+                    RegistersBuffer->RegistersBuffer[Content.REG] = RegistersBuffer->MemoryBuffer[TwoBytesDis];
                     sprintf(PC.Dest, "%s", Content.Reg);
                     sprintf(PC.Source, "[%d]", (signed short)TwoBytesDis);
                 }
                 else
                 {
-                    RegistersValues->Memory[TwoBytesDis] = RegistersValues->RegistersValue[Content.REG];
+                    RegistersBuffer->MemoryBuffer[TwoBytesDis] = RegistersBuffer->RegistersBuffer[Content.REG];
                     sprintf(PC.Dest, "[%d]", (signed short)TwoBytesDis);
                     sprintf(PC.Source, "%s", Content.Reg);
                 }
@@ -551,16 +644,16 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
             {
                 if(Content.DBit)
                 {
-                    LoadFromMemory(LMemory, RegistersValues, Content.OpCode);
+                    LoadFromMemory(LMemory, RegistersBuffer, Content.OpCode);
 
                     sprintf(PC.Dest, "%s", Content.Reg);
                     sprintf(PC.Source, "%s]", Registers->Register_Memory[Content.R_M]);
                 }
                 else
                 {
-                    WriteIntoMemory(LMemory, RegistersValues, Content.OpCode);
+                    WriteIntoMemory(LMemory, RegistersBuffer, Content.OpCode);
 
-                    sprintf(PC.Dest, "%s]", Registers->Register_Memory[Content.R_M]);
+                    sprintf(PC.Dest, "word %s]", Registers->Register_Memory[Content.R_M]);
                     sprintf(PC.Source, "%s", Content.Reg);
                 }
             }
@@ -569,7 +662,7 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
                 LMemory.DispValue = Content.DispLow; 
                 if(Content.DBit)
                 {
-                    LoadFromMemory(LMemory, RegistersValues, Content.OpCode);
+                    LoadFromMemory(LMemory, RegistersBuffer, Content.OpCode);
 
                     sprintf(PC.Dest, "%s", Content.Reg);
                     sprintf(PC.Source, "%s %+d]", Registers->Register_Memory[Content.R_M],
@@ -577,9 +670,9 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
                 }
                 else
                 {
-                    WriteIntoMemory(LMemory, RegistersValues, Content.OpCode);
+                    WriteIntoMemory(LMemory, RegistersBuffer, Content.OpCode);
 
-                    sprintf(PC.Dest, "%s %+d]", Registers->Register_Memory[Content.R_M],
+                    sprintf(PC.Dest, "word %s %+d]", Registers->Register_Memory[Content.R_M],
                             (signed char)LMemory.DispValue);
                     sprintf(PC.Source, "%s", Content.Reg);
                 }
@@ -589,7 +682,7 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
                 LMemory.DispValue = (((uint16)Content.DispHigh << 8)  | Content.DispLow); 
                 if(Content.DBit)
                 {
-                    LoadFromMemory(LMemory, RegistersValues, Content.OpCode);
+                    LoadFromMemory(LMemory, RegistersBuffer, Content.OpCode);
 
                     sprintf(PC.Dest, "%s", Content.Reg);
                     sprintf(PC.Source, "%s %+d]", Registers->Register_Memory[Content.R_M],
@@ -597,9 +690,9 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
                 }
                 else
                 {
-                    WriteIntoMemory(LMemory, RegistersValues, Content.OpCode);
+                    WriteIntoMemory(LMemory, RegistersBuffer, Content.OpCode);
 
-                    sprintf(PC.Dest, "%s %+d]", Registers->Register_Memory[Content.R_M],
+                    sprintf(PC.Dest, "word %s %+d]", Registers->Register_Memory[Content.R_M],
                             (signed short)LMemory.DispValue);
                     sprintf(PC.Source, "%s", Content.Reg);
                 }
@@ -608,7 +701,7 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
             {
                 if(Content.DBit)
                 {
-                    ComputeInstruction(Content.OpCode, Content.REG, Content.R_M, RegistersValues, 0,
+                    ComputeInstruction(Content.OpCode, Content.REG, Content.R_M, RegistersBuffer, 0,
                                        Content.WBit);
                     sprintf(PC.Dest, "%s", Content.Reg);
                     sprintf(PC.Source, "%s", Content.RegMem);
@@ -616,18 +709,20 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
 
                 else
                 {
-                    ComputeInstruction(Content.OpCode, Content.R_M, Content.REG, RegistersValues, 0,
+                    ComputeInstruction(Content.OpCode, Content.R_M, Content.REG, RegistersBuffer, 0,
                                        Content.WBit);
                     sprintf(PC.Dest, "%s", Content.RegMem);
                     sprintf(PC.Source, "%s", Content.Reg);
                 }
             }
 
-            PrintInstruction(PC);
+            PC.Clocks = *TotalCicles;
+            PrintInstruction(PC, LastCicles);
         } break;
 
         case 0xb0:
         {
+            *TotalCicles += 4;
             uint16 Data;
             if(Content.WBit)
             {
@@ -639,39 +734,45 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
                 {
                     Data = Content.Data;
                 }
-                RegistersValues->RegistersValue[Content.REG] = Data;
+                RegistersBuffer->RegistersBuffer[Content.REG] = Data;
         
-                printf("mov %s, %u\n", Content.Reg, Data);
+                printf("mov %s, %u ; LastClocks: %u,  +Clocks: %u, TotalClocks: %u\n",
+                       Content.Reg, Data, LastCicles, (*TotalCicles - LastCicles), *TotalCicles);
             }
             else
             {
                 Data = Content.Data;
                 if(Content.REG < 4)
                 {
-                    RegistersValues->RegistersValue[Content.REG] =
-                        (RegistersValues->RegistersValue[Content.REG] & 0xff00) | Data; 
+                    RegistersBuffer->RegistersBuffer[Content.REG] =
+                        (RegistersBuffer->RegistersBuffer[Content.REG] & 0xff00) | Data; 
                 }
                 else
                 {
-                    RegistersValues->RegistersValue[Content.REG - 4] =
-                        (RegistersValues->RegistersValue[Content.REG - 4] & 0x00ff) | (Data << 8); 
+                    RegistersBuffer->RegistersBuffer[Content.REG - 4] =
+                        (RegistersBuffer->RegistersBuffer[Content.REG - 4] & 0x00ff) | (Data << 8); 
                 }
-                printf("mov %s, %u\n", Content.Reg, Data);
+                printf("mov %s, %u ; LastClocks: %u,  +Clocks: %u, TotalClocks: %u\n",
+                       Content.Reg, Data, LastCicles, (*TotalCicles - LastCicles), *TotalCicles);
 
             }
         } break;
 
         case 0xa0:
         {
+            *TotalCicles += 10;
             uint16 TwoBytesDis = ((uint16)Content.DispHigh << 8) | (Content.DispLow); 
-            printf("mov ax, [%d]\n", (signed short)TwoBytesDis);
+            printf("mov ax, [%d] ; LastClocks: %u,  +Clocks: %u, TotalClocks: %u\n",
+                   (signed short)TwoBytesDis, LastCicles, (*TotalCicles - LastCicles), *TotalCicles);
 
         } break;
 
         case 0xa2:
         {
+            *TotalCicles += 10;
             uint16 TwoBytesDis = ((uint16)Content.DispHigh << 8) | (Content.DispLow); 
-            printf("mov [%d], ax\n", (signed short)TwoBytesDis);
+            printf("mov [%d], ax ; LastClocks: %u,  +Clocks: %u, TotalClocks: %u\n",
+                   (signed short)TwoBytesDis, LastCicles, (*TotalCicles - LastCicles), *TotalCicles);
 
         } break;
 
@@ -679,6 +780,7 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
         case 0x3c:
         case 0x2c:
         {
+            *TotalCicles += 4;
             if(Content.OpCode == 0x04)
             {
                 PC.Operation = "add";
@@ -706,8 +808,8 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
                 sprintf(PC.Source, "%d", Data);
             }
 
-            ComputeInstruction(Content.OpCode, 0, 0, RegistersValues, Data, Content.WBit);
-            PrintInstruction(PC);
+            ComputeInstruction(Content.OpCode, 0, 0, RegistersBuffer, Data, Content.WBit);
+            PrintInstruction(PC, LastCicles);
 
         } break;
 
@@ -716,6 +818,9 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
             load_memory LMemory = {};
             LMemory.R_MIndex = Content.R_M;
 
+            ComputeEACicles(&Content, TotalCicles);
+            *TotalCicles += 10;
+            
             char *WordByte;
             if(Content.WBit)
             {
@@ -757,8 +862,9 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
                         (signed short)LMemory.DispValue);
             }
 
-            ComputeImmediateMemoryOperations(LMemory, RegistersValues);
-            PrintInstruction(PC);
+            ComputeImmediateMemoryOperations(LMemory, RegistersBuffer);
+            PC.Clocks = *TotalCicles;
+            PrintInstruction(PC, LastCicles);
 
         } break;
 
@@ -777,6 +883,29 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
             {
                 PC.Operation = "cmp";
             }
+
+            if(Content.MOD != 3)
+            {
+                ComputeEACicles(&Content, TotalCicles);
+
+                if(Content.REG == 0)
+                {
+                    *TotalCicles += 17;
+                }
+                else if(Content.REG == 5)
+                {
+                    *TotalCicles += 17;
+                }
+                else if(Content.REG == 7)
+                {
+                    *TotalCicles += 10;
+                }
+            }
+            else
+            {
+                *TotalCicles += 4;
+            }
+            
             OpCode = (Content.OpCode << 8) | (Content.REG << 3);
 
             uint16 Data;
@@ -813,17 +942,18 @@ DetermineOperation(instruction_content Content, registers *Registers, values *Re
             }
             else if(Content.MOD == 3)
             {
-                ComputeInstruction(OpCode, Content.R_M, 0, RegistersValues, Data, Content.WBit);
+                ComputeInstruction(OpCode, Content.R_M, 0, RegistersBuffer, Data, Content.WBit);
                 sprintf(PC.Dest, "%s", Registers->MainRegisters[Content.R_M]);
             }
             
-            PrintInstruction(PC);
+            PC.Clocks = *TotalCicles;
+            PrintInstruction(PC, LastCicles);
             
         } break;
 
         default:
         {
-            JumpAndLoop(Content, Registers, RegistersValues);
+            JumpAndLoop(Content, Registers, RegistersBuffer);
 
         } break;
     };

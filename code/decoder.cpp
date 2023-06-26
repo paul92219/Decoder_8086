@@ -8,42 +8,10 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdint.h>
 
-typedef uint8_t uint8;
-typedef uint16_t uint16;
-
-#include "decider.h"
-#include "register_memory.cpp"
-
-char *MainRegisters[8] =
-{"ax", "cx", "dx", "bx", "sp", "bp", "si", "di"};
-
-char *SubRegisters[8] =
-{"al", "cl", "dl", "bl", "ah", "ch", "dh", "bh" };
-
-char *Register_Memory[8] =
-{"[bx + si", "[bx + di", "[bp + si", "[bp + di",
- "[si", "[di", "[bp", "[bx"};
-
-char *JumpInstructions[16] =
-{"jo", "jno", "jb", "jnb", "jz", "jnz", "jna", "ja",
- "js", "jns", "jp", "jnp", "jl", "jnl", "jng", "jg"};
-
-char *LoopInstructions[4] = {"loopnz", "loopz", "loop", "jcxz"};
-
-char *SegmentRegisters[4] = {"es", "cs", "ss", "ds"};
-
-uint8 OpCodeMasks[4] = {0xff, 0xfe, 0xfc, 0xf0};
-
-uint8 InstructionsOpCode[34] =
-{
-    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
-    0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
-    0xe0, 0xe1, 0xe2, 0xe3, 0x88, 0xb0, 0xa0, 0xa2,
-    0xc6, 0x28, 0x38, 0x00, 0x3c, 0x2c, 0x04, 0x80,
-    0x8e, 0x8c
-};
+#include "decoder_platform.h"
+#include "decoder.h"
+#include "compute.cpp"
 
 int
 ReadBinaryFile(char *FileName, uint8 *Buffer)
@@ -69,7 +37,7 @@ ReadBinaryFile(char *FileName, uint8 *Buffer)
 }
 
 instruction_content
-FindInstructionContent(uint8 *Buffer, uint8 Instruction, values *Values)
+FindInstructionContent(uint8 *Buffer, uint8 Instruction, data *Values)
 {
 
     uint8 Byte_2 = Buffer[Values->IPRegister + 1];
@@ -457,10 +425,12 @@ FindInstructionContent(uint8 *Buffer, uint8 Instruction, values *Values)
 
 int main()
 {
-    char FileName[] = "D:\\Projects\\Decoder_8086\\data\\listing_54_draw_rectangel";
+    char FileName[] = "D:\\Projects\\Decoder_8086\\data\\listing_56";
     uint8 GlobalBuffer[512] = {};
     int End = ReadBinaryFile(FileName, GlobalBuffer);
 
+    uint32 TotalCicles = 0;
+    
     registers Registers = {};
     Registers.MainRegisters = MainRegisters;
     Registers.Register_Memory = Register_Memory;
@@ -469,17 +439,18 @@ int main()
     Registers.SegmentRegisters = SegmentRegisters;
     Registers.SubRegisters = SubRegisters;
     
-    values RegistersValues = {};
+    data Values = {};
     
-    while(RegistersValues.IPRegister != End)
+    while(Values.IPRegister != End)
     {
-        uint8 Instruction = GlobalBuffer[RegistersValues.IPRegister];
-        instruction_content IC = FindInstructionContent(GlobalBuffer, Instruction, &RegistersValues);
-        RegistersValues.IPRegister++;
+        uint8 Instruction = GlobalBuffer[Values.IPRegister];
+        instruction_content IC = FindInstructionContent(GlobalBuffer, Instruction, &Values);
+        Values.IPRegister++;
 
-        DetermineOperation(IC, &Registers, &RegistersValues);
+        DetermineOperation(IC, &Registers, &Values, &TotalCicles);
     }
 
+#if 0    
     FILE *FileToWrite;
     
     FileToWrite = fopen("D:\\Projects\\Decoder_8086\\data\\test.data", "wb+");
@@ -489,9 +460,10 @@ int main()
         fwrite(RegistersValues.Memory, 1, 65536, FileToWrite);
         fclose(FileToWrite);
     }    
+#endif
     
 #if 1
-    printf("Finaly registers:\n");
+    printf("Final registers:\n");
     for(int RegIndex = 0;
         RegIndex < 8;
         ++RegIndex)
@@ -500,8 +472,8 @@ int main()
         {
             printf("\n");
         }
-        printf("    %s: 0x%x (%u)\n", MainRegisters[RegIndex], RegistersValues.RegistersValue[RegIndex],
-               RegistersValues.RegistersValue[RegIndex]);
+        printf("    %s: 0x%x (%u)\n", MainRegisters[RegIndex], Values.RegistersBuffer[RegIndex],
+               Values.RegistersBuffer[RegIndex]);
     }
 
     for(int SegRegIndex = 0;
@@ -509,12 +481,12 @@ int main()
         ++SegRegIndex)
     {
         printf("    %s: 0x%x (%u)\n", SegmentRegisters[SegRegIndex],
-               RegistersValues.SegmentRegistersValue[SegRegIndex],
-               RegistersValues.SegmentRegistersValue[SegRegIndex]);
+               Values.SegmentRegistersBuffer[SegRegIndex],
+               Values.SegmentRegistersBuffer[SegRegIndex]);
     }
 
-    printf("Flags: %x\n", RegistersValues.Flags);
-    printf("IP: %u", RegistersValues.IPRegister);
+    printf("Flags: %x\n", Values.Flags);
+    printf("IP: %u", Values.IPRegister);
 #endif
     return(0);
 }

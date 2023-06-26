@@ -7,5 +7,5 @@ REM TODO - can we just build both with one exe?
 IF NOT EXIST ..\..\builddecoder mkdir ..\..\builddecoder
 pushd ..\..\builddecoder
 
-cl %CommonCompilerFlags% ..\Decoder_8086\code\win32_decoder.cpp /link %CommonLinkerFlags% 
+cl %CommonCompilerFlags% ..\Decoder_8086\code\decoder.cpp /link %CommonLinkerFlags% 
 popd
